@@ -113,7 +113,7 @@ jobs:
               mkdir -p .cargo
               echo '[target.${{ matrix.target }}]'>>.cargo/config
               echo "linker = \"$TARGET_CC\"">>.cargo/config
-              echo "rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/mold"]" >> .cargo/config
+              echo "rustflags = ['-C', 'link-arg=-fuse-ld=/usr/bin/mold']" >> .cargo/config
           fi
       - name: Build ${{ matrix.target }}
         run: |
