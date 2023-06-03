@@ -76,13 +76,6 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             host_cc: ""
             target_cc: aarch64-linux-gnu
-          - target: armv7-unknown-linux-gnueabi
-            host_cc: i686-linux-gnu
-            target_cc: arm-linux-gnueabi
-          - target: armv7-unknown-linux-gnueabihf
-            host_cc: i686-linux-gnu
-            target_cc: arm-linux-gnueabihf
-
     env:
       CRATE_NAME: "VoxelTest"
     steps:
@@ -94,32 +87,32 @@ jobs:
         run: |
           rustup target add ${{ matrix.target }}
           
-          write_var(){
-            echo "$1=$(eval echo \$$1)" >> $GITHUB_ENV
-          }
-
-          sudo apt update
-          if ! [[ -z "${{ matrix.host_cc }}" ]]; then
-              export HOST_CC="${{ matrix.host_cc }}-gcc"
-              write_var HOST_CC
-
-              sudo apt install -y -qq gcc-${{ matrix.host_cc }}
-          fi
-
-          if ! [[ -z "${{ matrix.target_cc }}" ]]; then
-              export TARGET_CC="${{ matrix.target_cc }}-gcc"
-              write_var TARGET_CC
-
-              sudo apt install -y -qq gcc-${{ matrix.target_cc }}
-              mkdir -p .cargo
-              echo '[target.${{ matrix.target }}]'>>.cargo/config
-              echo "linker = \"$TARGET_CC\"">>.cargo/config
-          fi
+#          write_var(){
+#            echo "$1=$(eval echo \$$1)" >> $GITHUB_ENV
+#          }
+#
+#          sudo apt update
+#          if ! [[ -z "${{ matrix.host_cc }}" ]]; then
+#              export HOST_CC="${{ matrix.host_cc }}-gcc"
+#              write_var HOST_CC
+#
+#              sudo apt install -y -qq gcc-${{ matrix.host_cc }}
+#          fi
+#
+#          if ! [[ -z "${{ matrix.target_cc }}" ]]; then
+#              export TARGET_CC="${{ matrix.target_cc }}-gcc"
+#              write_var TARGET_CC
+#
+#              sudo apt install -y -qq gcc-${{ matrix.target_cc }}
+#              mkdir -p .cargo
+#              echo '[target.${{ matrix.target }}]'>>.cargo/config
+#              echo "linker = \"$TARGET_CC\"">>.cargo/config
+#          fi
       - name: Build ${{ matrix.target }}
         run: |
           cargo build --target=${{ matrix.target }} --release -vv
           cd target/${{ matrix.target }}/release/ && tar -cvf "$CRATE_NAME-${{ matrix.target }}.tar.gz" "$CRATE_NAME" && cd ../../..
-      - name: Upload ${{ env.CRATE_NAME }}-${{ matrix.target }}.tar.gz
+      - name: Upload VoxelTest-${{ matrix.target }}.tar.gz
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.CRATE_NAME }}-${{ matrix.target }}.tar.gz
