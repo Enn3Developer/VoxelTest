@@ -18,10 +18,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Setup
         run: |
+          rustup toolchain install nightly
+          rustup component add rust-src --toolchain nightly
+          rustup default nightly
           rustup target add ${{ matrix.target }}
       - name: Build ${{ matrix.target }}
         run: |
-          cargo build  --target=${{ matrix.target }} --release -vv
+          cargo build -Z build-std=std,panic_abort -Z build-std-features=panic_immediate_abort --target=${{ matrix.target }} --release -vv
           cd target\${{ matrix.target }}\release && tar -cavf "$env:CRATE_NAME-${{ matrix.target }}.zip" "$env:CRATE_NAME.exe"  && cd ../../..
       - name: Upload VoxelTest-${{ matrix.target }}
         uses: actions/upload-artifact@v3
@@ -50,6 +53,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Setup
         run: |
+          rustup toolchain install nightly
+          rustup component add rust-src --toolchain nightly
+          rustup default nightly
           rustup target add ${{ matrix.target }}
           brew install llvm
       - name: Build ${{ matrix.target }}
@@ -57,7 +63,7 @@ jobs:
           TARGET_LDFLAGS: "--target=${{ matrix.target }}"
           TARGET_CFLAGS: "--target=${{ matrix.target }}"
         run: |
-          cargo build --release --target=${{ matrix.target }} -vv
+          cargo build -Z build-std=std,panic_abort -Z build-std-features=panic_immediate_abort --release --target=${{ matrix.target }} -vv
           cd target/${{ matrix.target }}/release/ && tar -cvf "$CRATE_NAME-${{ matrix.target }}.tar.gz" "$CRATE_NAME" && cd ../../..
       - name: Upload VoxelTest-${{ matrix.target }}.tar.gz
         uses: actions/upload-artifact@v3
@@ -90,6 +96,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Setup
         run: |
+          rustup toolchain install nightly
+          rustup component add rust-src --toolchain nightly
+          rustup default nightly
           rustup target add ${{ matrix.target }}
           
           write_var(){
@@ -115,7 +124,7 @@ jobs:
           fi
       - name: Build ${{ matrix.target }}
         run: |
-          cargo build --target=${{ matrix.target }} --release -vv
+          cargo build -Z build-std=std,panic_abort -Z build-std-features=panic_immediate_abort --target=${{ matrix.target }} --release -vv
           cd target/${{ matrix.target }}/release/ && tar -cvf "$CRATE_NAME-${{ matrix.target }}.tar.gz" "$CRATE_NAME" && cd ../../..
       - name: Upload VoxelTest-${{ matrix.target }}.tar.gz
         uses: actions/upload-artifact@v3

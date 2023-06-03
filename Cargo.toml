@@ -28,6 +28,8 @@ opt-level = 1
 [profile.release]
 lto = true
 panic = "abort"
+strip = true
+codegen-units = 1
 
 [build-dependencies]
 anyhow = "1.0.71"
