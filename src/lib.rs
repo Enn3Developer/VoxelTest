@@ -7,12 +7,13 @@ use wgpu::{
     Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendComponent, BlendState,
     Buffer, BufferBindingType, BufferUsages, ColorTargetState, ColorWrites, CompareFunction,
-    DepthBiasState, DepthStencilState, Device, Face, FragmentState, FrontFace, InstanceDescriptor,
-    LoadOp, Operations, PipelineLayout, PipelineLayoutDescriptor, PolygonMode, PrimitiveState,
-    PrimitiveTopology, Queue, RenderPassDepthStencilAttachment, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState,
-    Surface, SurfaceConfiguration, TextureFormat, TextureSampleType, TextureViewDimension,
-    VertexBufferLayout, VertexState,
+    DepthBiasState, DepthStencilState, Device, Face, Features, FragmentState, FrontFace,
+    InstanceDescriptor, Limits, LoadOp, MultisampleState, Operations, PipelineLayout,
+    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PrimitiveState, PrimitiveTopology,
+    Queue, RenderPassDepthStencilAttachment, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, SamplerBindingType, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    StencilState, Surface, SurfaceConfiguration, TextureFormat, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexBufferLayout, VertexState,
 };
 
 use crate::camera::{Camera, CameraController, CameraUniform};
@@ -82,7 +83,7 @@ fn create_render_pipeline(
             stencil: StencilState::default(),
             bias: DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState {
+        multisample: MultisampleState {
             count: 1,
             mask: !0,
             alpha_to_coverage_enabled: false,
@@ -131,8 +132,8 @@ impl State {
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
 
         let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+            .request_adapter(&RequestAdapterOptions {
+                power_preference: PowerPreference::default(),
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -142,8 +143,8 @@ impl State {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
+                    features: Features::empty(),
+                    limits: Limits::default(),
                 },
                 None,
             )
@@ -157,8 +158,8 @@ impl State {
             .copied()
             .find(|f| f.is_srgb())
             .unwrap_or(surface_caps.formats[0]);
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        let config = SurfaceConfiguration {
+            usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width,
             height: size.height,
@@ -176,15 +177,15 @@ impl State {
                         visibility: ShaderStages::FRAGMENT,
                         ty: BindingType::Texture {
                             multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            sample_type: TextureSampleType::Float { filterable: true },
                         },
                         count: None,
                     },
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                     BindGroupLayoutEntry {
@@ -200,7 +201,7 @@ impl State {
                     BindGroupLayoutEntry {
                         binding: 3,
                         visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -242,7 +243,7 @@ impl State {
                 label: Some("camera_bind_group_layout"),
             });
 
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
             layout: &camera_bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
@@ -317,21 +318,20 @@ impl State {
             }],
         });
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &camera_bind_group_layout,
-                    &light_bind_group_layout,
-                ],
-                push_constant_ranges: &[],
-            });
+        let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[
+                &texture_bind_group_layout,
+                &camera_bind_group_layout,
+                &light_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
 
         let render_pipeline = {
             let shader = ShaderModuleDescriptor {
                 label: Some("Normal Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
+                source: ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
             };
             create_render_pipeline(
                 &device,

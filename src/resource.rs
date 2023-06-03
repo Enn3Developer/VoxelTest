@@ -5,10 +5,7 @@ use glam::{Vec2, Vec3};
 use std::io::{BufReader, Cursor};
 use tobj::LoadOptions;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, BufferUsages, Device,
-    Queue,
-};
+use wgpu::{BindGroupLayout, BufferUsages, Device, Queue};
 
 pub async fn load_string(file_name: &str) -> Result<String> {
     let path = std::path::Path::new(env!("OUT_DIR"))
