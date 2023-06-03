@@ -24,6 +24,8 @@ impl Camera {
 pub struct CameraUniform {
     pub view_position: [f32; 4],
     pub view_proj: [[f32; 4]; 4],
+    pub ambient_strength: f32,
+    _padding: [f32; 3],
 }
 
 impl CameraUniform {
@@ -31,6 +33,8 @@ impl CameraUniform {
         Self {
             view_position: [0.0; 4],
             view_proj: Mat4::default().to_cols_array_2d(),
+            ambient_strength: 0.01,
+            _padding: [0.0; 3],
         }
     }
 

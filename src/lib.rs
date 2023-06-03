@@ -287,7 +287,7 @@ impl State {
             .await
             .unwrap();
 
-        let light_uniform = LightUniform::new([2.0, 2.0, 2.0], [1.0, 1.0, 1.0]);
+        let light_uniform = LightUniform::new([2.0, 2.0, 2.0], [1.0, 1.0, 1.0], 8.0);
 
         let light_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Light VB"),

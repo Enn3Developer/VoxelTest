@@ -18,10 +18,12 @@ struct VertexOutput {
 struct CameraUniform {
     view_pos: vec4<f32>,
     view_proj: mat4x4<f32>,
-};
+    ambient_strength: f32,
+}
 
 struct Light {
     position: vec3<f32>,
+    radius: f32,
     color: vec3<f32>,
 }
 
@@ -43,7 +45,6 @@ var s_diffuse: sampler;
 var t_normal: texture_2d<f32>;
 @group(0)@binding(3)
 var s_normal: sampler;
-
 
 @group(1)@binding(0)
 var<uniform> camera: CameraUniform;
@@ -85,7 +86,7 @@ fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
     out.tangent_position = tangent_matrix * world_position.xyz;
     out.tangent_view_position = tangent_matrix * camera.view_pos.xyz;
     out.tangent_light_position = tangent_matrix * light.position;
-    out.dist = distance(model.position, light.position);
+    out.dist = distance(world_position.xyz, light.position);
 
     return out;
 }
@@ -95,8 +96,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let object_color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
     let object_normal: vec4<f32> = textureSample(t_normal, s_normal, in.tex_coords);
 
-    let ambient_strength = 0.1;
-    let ambient_color = light.color * ambient_strength;
+    let ambient_color = light.color * camera.ambient_strength;
 
     let tangent_normal = object_normal.xyz * 2.0 - 1.0;
     let light_dir = normalize(in.tangent_light_position - in.tangent_position);
@@ -109,7 +109,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let diffuse_color = light.color * diffuse_strength;
 
     let dist = in.dist;
-    let radius = 4.0;
+    let radius = light.radius;
 
     let att = clamp(1.0 - dist*dist/(radius*radius), 0.0, 1.0);
 
