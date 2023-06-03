@@ -16,6 +16,7 @@ anyhow = "1.0.71"
 glam = "0.24.0"
 rayon = "1.7.0"
 tobj = {version = "4.0.0", features = ["async"]}
+rust-embed = { version = "6.6.1", features = ["compression"] }
 
 [dependencies.image]
 version = "0.24.6"

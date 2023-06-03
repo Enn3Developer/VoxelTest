@@ -30,6 +30,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+mod assets;
 mod camera;
 mod instance;
 mod light;

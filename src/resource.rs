@@ -1,3 +1,4 @@
+use crate::assets::Res;
 use crate::model::{Material, Mesh, Model, ModelVertex};
 use crate::texture::Texture;
 use anyhow::Result;
@@ -8,19 +9,15 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BindGroupLayout, BufferUsages, Device, Queue};
 
 pub async fn load_string(file_name: &str) -> Result<String> {
-    let path = std::path::Path::new(env!("OUT_DIR"))
-        .join("res")
-        .join(file_name);
-    let txt = std::fs::read_to_string(path)?;
+    let res = Res::get(&format!("res/{file_name}")).unwrap();
+    let txt = String::from_utf8(res.data.into())?;
 
     Ok(txt)
 }
 
 pub async fn load_binary(file_name: &str) -> Result<Vec<u8>> {
-    let path = std::path::Path::new(env!("OUT_DIR"))
-        .join("res")
-        .join(file_name);
-    let data = std::fs::read(path)?;
+    let res = Res::get(&format!("res/{file_name}")).unwrap();
+    let data = res.data.into();
 
     Ok(data)
 }
