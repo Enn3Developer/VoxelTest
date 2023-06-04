@@ -1,19 +1,19 @@
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec3A};
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::dpi::PhysicalPosition;
-use winit::event::{ElementState, KeyboardInput, MouseScrollDelta, VirtualKeyCode, WindowEvent};
+use winit::event::{ElementState, MouseScrollDelta, VirtualKeyCode};
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
 pub struct Camera {
-    pub position: Vec3,
+    position: Vec3A,
     yaw: f32,
     pitch: f32,
 }
 
 impl Camera {
-    pub fn new<V: Into<Vec3>>(position: V, yaw: f32, pitch: f32) -> Self {
+    pub fn new<V: Into<Vec3A>>(position: V, yaw: f32, pitch: f32) -> Self {
         Self {
             position: position.into(),
             yaw,
@@ -25,10 +25,14 @@ impl Camera {
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
         Mat4::look_to_rh(
-            self.position,
+            self.position.into(),
             Vec3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
             Vec3::Y,
         )
+    }
+
+    pub fn position(&self) -> Vec3A {
+        self.position
     }
 }
 
@@ -168,8 +172,8 @@ impl CameraController {
 
         // Move forward/backward and left/right
         let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
-        let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
-        let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+        let forward = Vec3A::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let right = Vec3A::new(-yaw_sin, 0.0, yaw_cos).normalize();
         camera.position += forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
         camera.position += right * (self.amount_right - self.amount_left) * self.speed * dt;
 
@@ -178,7 +182,8 @@ impl CameraController {
         // changes when zooming. I've added this to make it easier
         // to get closer to an object you want to focus on.
         let (pitch_sin, pitch_cos) = camera.pitch.sin_cos();
-        let scrollward = Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+        let scrollward =
+            Vec3A::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
         camera.position += -scrollward * self.scroll * self.speed * self.sensitivity * dt;
         self.scroll = 0.0;
 

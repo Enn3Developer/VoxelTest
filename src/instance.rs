@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat3, Mat4, Quat, Vec3};
+use glam::{Mat3, Mat4, Quat, Vec3A};
 use std::mem::size_of;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode};
 
@@ -7,13 +7,20 @@ pub const SPACE_BETWEEN: f32 = 2.0;
 pub const NUM_INSTANCES_PER_ROW: u32 = 170;
 
 pub struct Instance {
-    pub position: Vec3,
+    pub position: Vec3A,
     pub rotation: Quat,
 }
 
 impl Instance {
+    pub fn new<V: Into<Vec3A>>(position: V) -> Self {
+        Self {
+            position: position.into(),
+            rotation: Quat::default(),
+        }
+    }
+
     pub fn to_raw(&self) -> InstanceRaw {
-        let model = Mat4::from_rotation_translation(self.rotation, self.position);
+        let model = Mat4::from_rotation_translation(self.rotation, self.position.into());
         InstanceRaw {
             model: model.to_cols_array_2d(),
             normal: Mat3::from_quat(self.rotation).to_cols_array_2d(),

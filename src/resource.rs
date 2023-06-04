@@ -2,7 +2,7 @@ use crate::assets::Res;
 use crate::model::{Material, Mesh, Model, ModelVertex};
 use crate::texture::Texture;
 use anyhow::Result;
-use glam::{Vec2, Vec3};
+use glam::{Vec2, Vec3A};
 use std::io::{BufReader, Cursor};
 use tobj::LoadOptions;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -103,9 +103,9 @@ pub async fn load_model(
                 let v1 = vertices[c[1] as usize];
                 let v2 = vertices[c[2] as usize];
 
-                let pos0: Vec3 = v0.position.into();
-                let pos1: Vec3 = v1.position.into();
-                let pos2: Vec3 = v2.position.into();
+                let pos0: Vec3A = v0.position.into();
+                let pos1: Vec3A = v1.position.into();
+                let pos2: Vec3A = v2.position.into();
 
                 let uv0: Vec2 = v0.tex_coords.into();
                 let uv1: Vec2 = v1.tex_coords.into();
@@ -134,17 +134,17 @@ pub async fn load_model(
 
                 // We'll use the same tangent/bitangent for each vertex in the triangle
                 vertices[c[0] as usize].tangent =
-                    (tangent + Vec3::from(vertices[c[0] as usize].tangent)).into();
+                    (tangent + Vec3A::from(vertices[c[0] as usize].tangent)).into();
                 vertices[c[1] as usize].tangent =
-                    (tangent + Vec3::from(vertices[c[1] as usize].tangent)).into();
+                    (tangent + Vec3A::from(vertices[c[1] as usize].tangent)).into();
                 vertices[c[2] as usize].tangent =
-                    (tangent + Vec3::from(vertices[c[2] as usize].tangent)).into();
+                    (tangent + Vec3A::from(vertices[c[2] as usize].tangent)).into();
                 vertices[c[0] as usize].bitangent =
-                    (bitangent + Vec3::from(vertices[c[0] as usize].bitangent)).into();
+                    (bitangent + Vec3A::from(vertices[c[0] as usize].bitangent)).into();
                 vertices[c[1] as usize].bitangent =
-                    (bitangent + Vec3::from(vertices[c[1] as usize].bitangent)).into();
+                    (bitangent + Vec3A::from(vertices[c[1] as usize].bitangent)).into();
                 vertices[c[2] as usize].bitangent =
-                    (bitangent + Vec3::from(vertices[c[2] as usize].bitangent)).into();
+                    (bitangent + Vec3A::from(vertices[c[2] as usize].bitangent)).into();
 
                 // Used to average the tangents/bitangents
                 triangles_included[c[0] as usize] += 1;
@@ -156,8 +156,8 @@ pub async fn load_model(
             for (i, n) in triangles_included.into_iter().enumerate() {
                 let denom = 1.0 / n as f32;
                 let mut v = &mut vertices[i];
-                v.tangent = (Vec3::from(v.tangent) * denom).into();
-                v.bitangent = (Vec3::from(v.bitangent) * denom).into();
+                v.tangent = (Vec3A::from(v.tangent) * denom).into();
+                v.bitangent = (Vec3A::from(v.bitangent) * denom).into();
             }
 
             let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {

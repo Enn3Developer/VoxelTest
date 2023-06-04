@@ -3,8 +3,8 @@ use bytemuck::{Pod, Zeroable};
 use std::mem::size_of;
 use std::ops::Range;
 use wgpu::{
-    BindGroup, Buffer, BufferAddress, IndexFormat, RenderPass, VertexAttribute, VertexBufferLayout,
-    VertexFormat, VertexStepMode,
+    BindGroup, BindGroupLayout, Buffer, BufferAddress, Device, IndexFormat, RenderPass,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 
 pub trait Vertex {
@@ -71,11 +71,11 @@ pub struct Material {
 
 impl Material {
     pub fn new(
-        device: &wgpu::Device,
+        device: &Device,
         name: &str,
         diffuse_texture: Texture,
         normal_texture: Texture,
-        layout: &wgpu::BindGroupLayout,
+        layout: &BindGroupLayout,
     ) -> Self {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
@@ -258,7 +258,7 @@ where
         light_bind_group: &'b BindGroup,
     ) {
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-        self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        self.set_index_buffer(mesh.index_buffer.slice(..), IndexFormat::Uint32);
         self.set_bind_group(0, camera_bind_group, &[]);
         self.set_bind_group(1, light_bind_group, &[]);
         self.draw_indexed(0..mesh.num_elements, 0, instances);

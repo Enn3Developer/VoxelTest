@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use bytemuck::cast_slice;
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec3, Vec3A};
 use std::iter;
 use std::time::{Duration, Instant};
 use wgpu::{
@@ -259,10 +259,7 @@ impl State {
                     let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
                     let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                    let position = Vec3::new(x, 0.0, z);
-                    let rotation = Quat::from_axis_angle(Vec3::Z, 0.0);
-
-                    Instance { position, rotation }
+                    Instance::new((x, 0.0, z))
                 })
             })
             .collect::<Vec<Instance>>();
@@ -438,7 +435,7 @@ impl State {
         self.queue
             .write_buffer(&self.camera_buffer, 0, cast_slice(&[self.camera_uniform]));
 
-        let old_position = Vec3::from_array(*self.light_uniform.position());
+        let old_position = Vec3A::from_array(*self.light_uniform.position());
         self.light_uniform.set_position(
             (Quat::from_axis_angle(Vec3::Y, 1.05 * dt.as_secs_f32()) * old_position).to_array(),
         );
