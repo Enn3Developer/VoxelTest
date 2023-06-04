@@ -217,7 +217,7 @@ impl State {
             });
 
         let camera = Camera::new((0.0, 5.0, 10.0), -1.57, -0.35);
-        let projection = Projection::new(config.width, config.height, 0.78, 0.1, 100.0);
+        let projection = Projection::new(config.width, config.height, 0.78, 0.1, 1000.0);
         let camera_controller = CameraController::new(4.0, 1.0);
 
         let mut camera_uniform = CameraUniform::new();
@@ -260,12 +260,7 @@ impl State {
                     let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
                     let position = Vec3::new(x, 0.0, z);
-
-                    let rotation = if position == Vec3::ZERO {
-                        Quat::from_axis_angle(Vec3::Z, 0.0)
-                    } else {
-                        Quat::from_axis_angle(position.normalize(), 0.78)
-                    };
+                    let rotation = Quat::from_axis_angle(Vec3::Z, 0.0);
 
                     Instance { position, rotation }
                 })
@@ -563,6 +558,8 @@ pub async fn run() {
                 let now = Instant::now();
                 let dt = now - last_render_time;
                 last_render_time = now;
+                #[cfg(debug_assertions)]
+                println!("dt: {}ms", dt.as_millis());
                 state.update(dt);
                 match state.render() {
                     Ok(_) => {}
