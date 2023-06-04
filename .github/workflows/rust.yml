@@ -18,6 +18,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Setup
         run: |
+          winget install -e --id LLVM.LLVM
           rustup toolchain install nightly
           rustup component add rust-src --toolchain nightly
           rustup default nightly
