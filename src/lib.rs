@@ -3,20 +3,21 @@
 use bytemuck::cast_slice;
 use glam::{Quat, Vec3};
 use std::iter;
+use std::time::{Duration, Instant};
 use wgpu::{
     Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendComponent, BlendState,
     Buffer, BufferBindingType, BufferUsages, ColorTargetState, ColorWrites, CompareFunction,
     DepthBiasState, DepthStencilState, Device, Face, Features, FragmentState, FrontFace,
     InstanceDescriptor, Limits, LoadOp, MultisampleState, Operations, PipelineLayout,
-    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PrimitiveState, PrimitiveTopology,
-    Queue, RenderPassDepthStencilAttachment, RenderPipeline, RenderPipelineDescriptor,
-    RequestAdapterOptions, SamplerBindingType, ShaderModuleDescriptor, ShaderSource, ShaderStages,
-    StencilState, Surface, SurfaceConfiguration, TextureFormat, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexBufferLayout, VertexState,
+    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
+    PrimitiveTopology, Queue, RenderPassDepthStencilAttachment, RenderPipeline,
+    RenderPipelineDescriptor, RequestAdapterOptions, SamplerBindingType, ShaderModuleDescriptor,
+    ShaderSource, ShaderStages, StencilState, Surface, SurfaceConfiguration, TextureFormat,
+    TextureSampleType, TextureUsages, TextureViewDimension, VertexBufferLayout, VertexState,
 };
 
-use crate::camera::{Camera, CameraController, CameraUniform};
+use crate::camera::{Camera, CameraController, CameraUniform, Projection};
 use crate::instance::{Instance, InstanceRaw, NUM_INSTANCES_PER_ROW, SPACE_BETWEEN};
 use crate::light::LightUniform;
 use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex};
@@ -101,7 +102,9 @@ struct State {
     size: PhysicalSize<u32>,
     render_pipeline: RenderPipeline,
     camera: Camera,
+    projection: Projection,
     camera_controller: CameraController,
+    mouse_pressed: bool,
     camera_uniform: CameraUniform,
     camera_buffer: Buffer,
     camera_bind_group: BindGroup,
@@ -164,7 +167,11 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: surface_caps.present_modes[0],
+            present_mode: *surface_caps
+                .present_modes
+                .iter()
+                .find(|present_mode| present_mode == &&PresentMode::Immediate)
+                .unwrap(),
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
@@ -209,19 +216,12 @@ impl State {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let camera = Camera {
-            eye: (0.0, 1.0, 2.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
-            up: Vec3::Y,
-            aspect: config.width as f32 / config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 1000.0,
-        };
-        let camera_controller = CameraController::new(0.2);
+        let camera = Camera::new((0.0, 5.0, 10.0), -1.57, -0.35);
+        let projection = Projection::new(config.width, config.height, 0.78, 0.1, 100.0);
+        let camera_controller = CameraController::new(4.0, 1.0);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        camera_uniform.update_view_proj(&camera, &projection);
 
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -372,7 +372,9 @@ impl State {
             size,
             render_pipeline,
             camera,
+            projection,
             camera_controller,
+            mouse_pressed: false,
             camera_buffer,
             camera_bind_group,
             camera_uniform,
@@ -400,7 +402,7 @@ impl State {
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
 
-            self.camera.aspect = self.config.width as f32 / self.config.height as f32;
+            self.projection.resize(new_size.width, new_size.height);
 
             self.depth_texture =
                 Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
@@ -408,18 +410,43 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event)
+        match event {
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => self.camera_controller.process_keyboard(*key, *state),
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.camera_controller.process_scroll(delta);
+                true
+            }
+            WindowEvent::MouseInput {
+                button: MouseButton::Left,
+                state,
+                ..
+            } => {
+                self.mouse_pressed = *state == ElementState::Pressed;
+                true
+            }
+            _ => false,
+        }
     }
 
-    fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
-        self.camera_uniform.update_view_proj(&self.camera);
+    fn update(&mut self, dt: Duration) {
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
         self.queue
             .write_buffer(&self.camera_buffer, 0, cast_slice(&[self.camera_uniform]));
 
         let old_position = Vec3::from_array(*self.light_uniform.position());
-        self.light_uniform
-            .set_position((Quat::from_axis_angle(Vec3::Y, 0.02) * old_position).to_array());
+        self.light_uniform.set_position(
+            (Quat::from_axis_angle(Vec3::Y, 1.05 * dt.as_secs_f32()) * old_position).to_array(),
+        );
         self.queue
             .write_buffer(&self.light_buffer, 0, cast_slice(&[self.light_uniform]));
     }
@@ -497,48 +524,59 @@ pub async fn run() {
         .unwrap();
 
     let mut state = State::new(window).await;
+    let mut last_render_time = Instant::now();
 
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent {
-            ref event,
-            window_id,
-        } if window_id == state.window().id() => {
-            if !state.input(event) {
-                match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                    }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        state.resize(**new_inner_size);
-                    }
-                    _ => {}
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+        match event {
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta },
+                ..
+            } => {
+                if state.mouse_pressed {
+                    state.camera_controller.process_mouse(delta.0, delta.1)
                 }
             }
-        }
-        Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-            state.update();
-            match state.render() {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    state.resize(state.size)
+            Event::WindowEvent {
+                ref event,
+                window_id,
+            } if window_id == state.window().id() && !state.input(event) => match event {
+                WindowEvent::CloseRequested
+                | WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => *control_flow = ControlFlow::Exit,
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(*physical_size);
                 }
-                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    state.resize(**new_inner_size);
+                }
+                _ => {}
+            },
+            Event::RedrawRequested(window_id) if window_id == state.window().id() => {
+                let now = Instant::now();
+                let dt = now - last_render_time;
+                last_render_time = now;
+                state.update(dt);
+                match state.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        state.resize(state.size)
+                    }
+                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                }
             }
+            Event::MainEventsCleared => {
+                state.window().request_redraw();
+            }
+            _ => {}
         }
-        Event::MainEventsCleared => {
-            state.window().request_redraw();
-        }
-        _ => {}
     });
 }
