@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat3, Mat4, Quat, Vec3A};
+use glam::{Mat4, Quat, Vec3A};
 use std::mem::size_of;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode};
 
@@ -23,7 +23,6 @@ impl Instance {
         let model = Mat4::from_rotation_translation(self.rotation, self.position.into());
         InstanceRaw {
             model: model.to_cols_array_2d(),
-            normal: Mat3::from_quat(self.rotation).to_cols_array_2d(),
         }
     }
 }
@@ -32,7 +31,6 @@ impl Instance {
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct InstanceRaw {
     pub model: [[f32; 4]; 4],
-    pub normal: [[f32; 3]; 3],
 }
 
 impl InstanceRaw {
@@ -60,21 +58,6 @@ impl InstanceRaw {
                     offset: size_of::<[f32; 12]>() as BufferAddress,
                     shader_location: 8,
                     format: VertexFormat::Float32x4,
-                },
-                VertexAttribute {
-                    offset: size_of::<[f32; 16]>() as BufferAddress,
-                    shader_location: 9,
-                    format: VertexFormat::Float32x3,
-                },
-                VertexAttribute {
-                    offset: size_of::<[f32; 19]>() as BufferAddress,
-                    shader_location: 10,
-                    format: VertexFormat::Float32x3,
-                },
-                VertexAttribute {
-                    offset: size_of::<[f32; 22]>() as BufferAddress,
-                    shader_location: 11,
-                    format: VertexFormat::Float32x3,
                 },
             ],
         }

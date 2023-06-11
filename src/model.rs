@@ -16,9 +16,6 @@ pub trait Vertex {
 pub struct ModelVertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
-    pub normal: [f32; 3],
-    pub tangent: [f32; 3],
-    pub bitangent: [f32; 3],
 }
 
 impl Vertex for ModelVertex {
@@ -37,21 +34,6 @@ impl Vertex for ModelVertex {
                     shader_location: 1,
                     format: VertexFormat::Float32x2,
                 },
-                VertexAttribute {
-                    offset: size_of::<[f32; 5]>() as BufferAddress,
-                    shader_location: 2,
-                    format: VertexFormat::Float32x3,
-                },
-                VertexAttribute {
-                    offset: size_of::<[f32; 8]>() as BufferAddress,
-                    shader_location: 3,
-                    format: VertexFormat::Float32x3,
-                },
-                VertexAttribute {
-                    offset: size_of::<[f32; 11]>() as BufferAddress,
-                    shader_location: 4,
-                    format: VertexFormat::Float32x3,
-                },
             ],
         }
     }
@@ -65,7 +47,6 @@ pub struct Model {
 pub struct Material {
     pub name: String,
     pub diffuse_texture: Texture,
-    pub normal_texture: Texture,
     pub bind_group: BindGroup,
 }
 
@@ -74,7 +55,6 @@ impl Material {
         device: &Device,
         name: &str,
         diffuse_texture: Texture,
-        normal_texture: Texture,
         layout: &BindGroupLayout,
     ) -> Self {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -88,14 +68,6 @@ impl Material {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&normal_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
-                },
             ],
             label: Some(name),
         });
@@ -103,7 +75,6 @@ impl Material {
         Self {
             name: String::from(name),
             diffuse_texture,
-            normal_texture,
             bind_group,
         }
     }
