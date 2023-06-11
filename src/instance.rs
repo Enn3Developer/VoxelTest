@@ -4,7 +4,7 @@ use std::mem::size_of;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode};
 
 pub const SPACE_BETWEEN: f32 = 2.0;
-pub const NUM_INSTANCES_PER_ROW: u32 = 170;
+pub const NUM_INSTANCES_PER_ROW: u32 = 250;
 
 pub struct Instance {
     pub position: Vec3A,

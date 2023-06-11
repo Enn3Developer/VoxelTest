@@ -4,7 +4,6 @@ use crate::texture::Texture;
 use anyhow::Result;
 use glam::{Vec2, Vec3A};
 use std::io::{BufReader, Cursor};
-use tobj::LoadOptions;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BindGroupLayout, BufferUsages, Device, Queue};
 
@@ -42,19 +41,12 @@ pub async fn load_model(
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
 
-    let (models, obj_materials) = tobj::load_obj_buf_async(
-        &mut obj_reader,
-        &LoadOptions {
-            triangulate: true,
-            single_index: true,
-            ..Default::default()
-        },
-        |p| async move {
+    let (models, obj_materials) =
+        tobj::load_obj_buf_async(&mut obj_reader, &tobj::GPU_LOAD_OPTIONS, |p| async move {
             let mat_text = load_string(&p).await.unwrap();
             tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
-        },
-    )
-    .await?;
+        })
+        .await?;
 
     let mut materials = vec![];
     for m in obj_materials? {
