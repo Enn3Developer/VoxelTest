@@ -2,6 +2,7 @@
 
 use bytemuck::cast_slice;
 use glam::{Quat, Vec3, Vec3A};
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use std::iter;
 use std::time::{Duration, Instant};
 use wgpu::{
@@ -440,6 +441,19 @@ impl State {
             });
 
         {
+            let instance_data = self
+                .instances
+                .par_iter()
+                .filter(|instance| instance.position.distance(self.camera.position()) < 1024.0)
+                .map(|instance| instance.to_raw())
+                .collect::<Vec<InstanceRaw>>();
+
+            let instance_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: cast_slice(&instance_data),
+                usage: BufferUsages::VERTEX,
+            });
+
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -465,7 +479,7 @@ impl State {
                 }),
             });
 
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
 
             render_pass.set_pipeline(&self.light_render_pipeline);
             render_pass.draw_light_model(
@@ -477,7 +491,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.draw_model_instanced(
                 &self.obj_model,
-                0..self.instances.len() as u32,
+                0..instance_data.len() as u32,
                 &self.camera_bind_group,
                 &self.light_bind_group,
             );

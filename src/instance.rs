@@ -3,7 +3,7 @@ use glam::{Mat4, Quat, Vec3A};
 use std::mem::size_of;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode};
 
-pub const SPACE_BETWEEN: f32 = 2.0;
+pub const SPACE_BETWEEN: f32 = 1.0;
 pub const NUM_INSTANCES_PER_ROW: u32 = 250;
 
 pub struct Instance {
@@ -21,19 +21,23 @@ impl Instance {
 
     pub fn to_raw(&self) -> InstanceRaw {
         let model = Mat4::from_rotation_translation(self.rotation, self.position.into());
-        InstanceRaw {
-            model: model.to_cols_array_2d(),
-        }
+        InstanceRaw::new(model)
     }
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct InstanceRaw {
-    pub model: [[f32; 4]; 4],
+    model: [[f32; 4]; 4],
 }
 
 impl InstanceRaw {
+    pub fn new(model: Mat4) -> Self {
+        Self {
+            model: model.to_cols_array_2d(),
+        }
+    }
+
     pub fn desc() -> VertexBufferLayout<'static> {
         VertexBufferLayout {
             array_stride: size_of::<InstanceRaw>() as BufferAddress,

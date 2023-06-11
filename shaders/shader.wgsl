@@ -43,6 +43,8 @@ var<uniform> light: Light;
 fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
 
+    let scale = 0.5;
+
     let model_matrix = mat4x4<f32>(
         instance.model_matrix_0,
         instance.model_matrix_1,
@@ -50,7 +52,7 @@ fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
         instance.model_matrix_3,
     );
 
-    let world_position = model_matrix * vec4<f32>(model.position, 1.0);
+    let world_position = model_matrix * vec4<f32>(model.position * scale, 1.0);
 
     out.clip_position = camera.view_proj * world_position;
     out.tex_coords = model.tex_coords;
