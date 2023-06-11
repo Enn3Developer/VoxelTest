@@ -38,18 +38,18 @@ impl Camera {
 
 pub struct Projection {
     aspect: f32,
-    fovy: f32,
-    znear: f32,
-    zfar: f32,
+    fov_y: f32,
+    z_near: f32,
+    z_far: f32,
 }
 
 impl Projection {
-    pub fn new(width: u32, height: u32, fovy: f32, znear: f32, zfar: f32) -> Self {
+    pub fn new(width: u32, height: u32, fov_y: f32, z_near: f32, z_far: f32) -> Self {
         Self {
             aspect: width as f32 / height as f32,
-            fovy,
-            znear,
-            zfar,
+            fov_y,
+            z_near,
+            z_far,
         }
     }
 
@@ -58,7 +58,20 @@ impl Projection {
     }
 
     pub fn calc_matrix(&self) -> Mat4 {
-        Mat4::perspective_rh(self.fovy, self.aspect, self.znear, self.zfar)
+        Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far)
+    }
+
+    pub fn aspect(&self) -> f32 {
+        self.aspect
+    }
+    pub fn fov_y(&self) -> f32 {
+        self.fov_y
+    }
+    pub fn z_near(&self) -> f32 {
+        self.z_near
+    }
+    pub fn z_far(&self) -> f32 {
+        self.z_far
     }
 }
 

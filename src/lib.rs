@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 
 use bytemuck::cast_slice;
+use cgmath::{Matrix4, SquareMatrix};
+use cgmath_culling::{FrustumCuller, Intersection};
 use glam::{Quat, Vec3, Vec3A};
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use std::iter;
@@ -441,10 +443,25 @@ impl State {
             });
 
         {
+            let matrix = self.projection.calc_matrix() * self.camera.calc_matrix();
+            let mut mat = Matrix4::identity();
+            mat.x = matrix.x_axis.to_array().into();
+            mat.y = matrix.y_axis.to_array().into();
+            mat.z = matrix.z_axis.to_array().into();
+            mat.w = matrix.w_axis.to_array().into();
+
+            // TODO: Implement this using glam
+            let culling = FrustumCuller::from_matrix(mat);
             let instance_data = self
                 .instances
                 .par_iter()
-                .filter(|instance| instance.position.distance(self.camera.position()) < 1024.0)
+                .filter(|instance| {
+                    instance.position.distance_squared(self.camera.position())
+                        < self.projection.z_far().powi(2)
+                })
+                .filter(|instance| {
+                    culling.test_bounding_box(instance.aabb()) != Intersection::Outside
+                })
                 .map(|instance| instance.to_raw())
                 .collect::<Vec<InstanceRaw>>();
 
