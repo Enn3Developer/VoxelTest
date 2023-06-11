@@ -1,6 +1,5 @@
+use crate::frustum::Aabb;
 use bytemuck::{Pod, Zeroable};
-use cgmath::Vector3;
-use cgmath_culling::BoundingBox;
 use glam::{Mat4, Vec3A};
 use std::mem::size_of;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode};
@@ -10,15 +9,13 @@ pub const NUM_INSTANCES_PER_ROW: u32 = 256;
 
 pub struct Instance {
     pub position: Vec3A,
-    aabb: BoundingBox<f32>,
+    aabb: Aabb,
 }
 
 impl Instance {
     pub fn new<V: Into<Vec3A>>(position: V) -> Self {
         let position = position.into();
-        let min = (position - 0.5).to_array();
-        let max = (position + 0.5).to_array();
-        let aabb = BoundingBox::from_params(Vector3::from(min), Vector3::from(max));
+        let aabb = Aabb::from_params((position - 0.5).into(), (position + 0.5).into());
         Self { position, aabb }
     }
 
@@ -27,8 +24,8 @@ impl Instance {
         InstanceRaw::new(model)
     }
 
-    pub fn aabb(&self) -> BoundingBox<f32> {
-        self.aabb
+    pub fn aabb(&self) -> &Aabb {
+        &self.aabb
     }
 }
 
