@@ -2,7 +2,7 @@
 
 use bytemuck::cast_slice;
 use glam::{Mat4, Quat, Vec3, Vec3A};
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::iter;
 use std::time::{Duration, Instant};
 use wgpu::{
@@ -19,6 +19,7 @@ use wgpu::{
 };
 
 use crate::camera::{Camera, CameraController, CameraUniform, Projection};
+use crate::frustum::FrustumCuller;
 use crate::instance::{Instance, InstanceRaw, NUM_INSTANCES_PER_ROW, SPACE_BETWEEN};
 use crate::light::LightUniform;
 use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex};
@@ -442,7 +443,7 @@ impl State {
             });
 
         {
-            let culling = frustum::FrustumCuller::from_matrix(Mat4::from_cols_array_2d(
+            let culling = FrustumCuller::from_matrix(Mat4::from_cols_array_2d(
                 &self.camera_uniform.view_proj,
             ));
 
@@ -453,9 +454,7 @@ impl State {
                     instance.position.distance_squared(self.camera.position())
                         < self.projection.z_far().powi(2)
                 })
-                .filter(|instance| {
-                    culling.test_bounding_box(instance.aabb()) != frustum::Intersection::Outside
-                })
+                .filter(|instance| culling.test_bounding_box(instance.aabb()))
                 .map(|instance| instance.to_raw())
                 .collect::<Vec<InstanceRaw>>();
 

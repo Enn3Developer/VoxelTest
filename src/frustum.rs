@@ -33,16 +33,6 @@ pub struct Aabb {
     max: Vec3,
 }
 
-#[derive(PartialEq)]
-pub enum Intersection {
-    /// fully inside the frustum
-    Inside,
-    /// Partially inside the frustum
-    Partial,
-    /// Fully outside the frustum
-    Outside,
-}
-
 impl Aabb {
     #[inline]
     pub fn from_params(min: Vec3, max: Vec3) -> Self {
@@ -91,8 +81,7 @@ impl FrustumCuller {
         culler
     }
 
-    pub fn test_bounding_box(&self, aab: &Aabb) -> Intersection {
-        let mut inside = true;
+    pub fn test_bounding_box(&self, aab: &Aabb) -> bool {
         if self.nx_x
             * if self.nx_x < 0.0 {
                 aab.min.x
@@ -113,25 +102,6 @@ impl FrustumCuller {
                 }
             >= -self.nx_w
         {
-            inside &= self.nx_x
-                * if self.nx_x < 0.0 {
-                    aab.max.x
-                } else {
-                    aab.min.x
-                }
-                + self.nx_y
-                    * if self.nx_y < 0.0 {
-                        aab.max.y
-                    } else {
-                        aab.min.y
-                    }
-                + self.nx_z
-                    * if self.nx_z < 0.0 {
-                        aab.max.z
-                    } else {
-                        aab.min.z
-                    }
-                >= -self.nx_w;
             if self.px_x
                 * if self.px_x < 0.0 {
                     aab.min.x
@@ -152,25 +122,6 @@ impl FrustumCuller {
                     }
                 >= -self.px_w
             {
-                inside &= self.px_x
-                    * if self.px_x < 0.0 {
-                        aab.max.x
-                    } else {
-                        aab.min.x
-                    }
-                    + self.px_y
-                        * if self.px_y < 0.0 {
-                            aab.max.y
-                        } else {
-                            aab.min.y
-                        }
-                    + self.px_z
-                        * if self.px_z < 0.0 {
-                            aab.max.z
-                        } else {
-                            aab.min.z
-                        }
-                    >= -self.px_w;
                 if self.ny_x
                     * if self.ny_x < 0.0 {
                         aab.min.x
@@ -191,25 +142,6 @@ impl FrustumCuller {
                         }
                     >= -self.ny_w
                 {
-                    inside &= self.ny_x
-                        * if self.ny_x < 0.0 {
-                            aab.max.x
-                        } else {
-                            aab.min.x
-                        }
-                        + self.ny_y
-                            * if self.ny_y < 0.0 {
-                                aab.max.y
-                            } else {
-                                aab.min.y
-                            }
-                        + self.ny_z
-                            * if self.ny_z < 0.0 {
-                                aab.max.z
-                            } else {
-                                aab.min.z
-                            }
-                        >= -self.ny_w;
                     if self.py_x
                         * if self.py_x < 0.0 {
                             aab.min.x
@@ -230,25 +162,6 @@ impl FrustumCuller {
                             }
                         >= -self.py_w
                     {
-                        inside &= self.py_x
-                            * if self.py_x < 0.0 {
-                                aab.max.x
-                            } else {
-                                aab.min.x
-                            }
-                            + self.py_y
-                                * if self.py_y < 0.0 {
-                                    aab.max.y
-                                } else {
-                                    aab.min.y
-                                }
-                            + self.py_z
-                                * if self.py_z < 0.0 {
-                                    aab.max.z
-                                } else {
-                                    aab.min.z
-                                }
-                            >= -self.py_w;
                         if self.nz_x
                             * if self.nz_x < 0.0 {
                                 aab.min.x
@@ -269,25 +182,6 @@ impl FrustumCuller {
                                 }
                             >= -self.nz_w
                         {
-                            inside &= self.nz_x
-                                * if self.nz_x < 0.0 {
-                                    aab.max.x
-                                } else {
-                                    aab.min.x
-                                }
-                                + self.nz_y
-                                    * if self.nz_y < 0.0 {
-                                        aab.max.y
-                                    } else {
-                                        aab.min.y
-                                    }
-                                + self.nz_z
-                                    * if self.nz_z < 0.0 {
-                                        aab.max.z
-                                    } else {
-                                        aab.min.z
-                                    }
-                                >= -self.nz_w;
                             if self.pz_x
                                 * if self.pz_x < 0.0 {
                                     aab.min.x
@@ -308,30 +202,7 @@ impl FrustumCuller {
                                     }
                                 >= -self.pz_w
                             {
-                                inside &= self.pz_x
-                                    * if self.pz_x < 0.0 {
-                                        aab.max.x
-                                    } else {
-                                        aab.min.x
-                                    }
-                                    + self.pz_y
-                                        * if self.pz_y < 0.0 {
-                                            aab.max.y
-                                        } else {
-                                            aab.min.y
-                                        }
-                                    + self.pz_z
-                                        * if self.pz_z < 0.0 {
-                                            aab.max.z
-                                        } else {
-                                            aab.min.z
-                                        }
-                                    >= -self.pz_w;
-                                return if inside {
-                                    Intersection::Inside
-                                } else {
-                                    Intersection::Partial
-                                };
+                                return true;
                             }
                         }
                     }
@@ -339,6 +210,6 @@ impl FrustumCuller {
             }
         }
 
-        Intersection::Outside
+        false
     }
 }
