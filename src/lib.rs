@@ -535,7 +535,7 @@ impl State {
         }
 
         self.glyph_brush.queue(Section {
-            screen_position: (30.0, 30.0),
+            screen_position: (10.0, 10.0),
             bounds: (self.config.width as f32, self.config.height as f32),
             text: vec![Text::new(&format!("fps: {}", self.fps)).with_color([1.0, 1.0, 1.0, 1.0])],
             ..Default::default()
