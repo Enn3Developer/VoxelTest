@@ -73,7 +73,7 @@ impl FrustumCuller {
     }
 
     pub fn test_bounding_box(&self, aab: &Aabb) -> bool {
-        if self.nx_x
+        self.nx_x
             * if self.nx_x < 0.0 {
                 aab.min.x
             } else {
@@ -187,10 +187,5 @@ impl FrustumCuller {
                         aab.max.z
                     }
                 >= -self.pz_w
-        {
-            true
-        } else {
-            false
-        }
     }
 }

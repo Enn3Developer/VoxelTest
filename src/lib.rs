@@ -6,16 +6,16 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::iter;
 use std::time::{Duration, Instant};
 use wgpu::{
-    Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendComponent, BlendState,
-    Buffer, BufferBindingType, BufferUsages, ColorTargetState, ColorWrites, CompareFunction,
-    DepthBiasState, DepthStencilState, Device, Face, Features, FragmentState, FrontFace,
-    InstanceDescriptor, Limits, LoadOp, MultisampleState, Operations, PipelineLayout,
-    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, Queue, RenderPassDepthStencilAttachment, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, SamplerBindingType, ShaderModuleDescriptor,
-    ShaderSource, ShaderStages, StencilState, Surface, SurfaceConfiguration, TextureFormat,
-    TextureSampleType, TextureUsages, TextureViewDimension, VertexBufferLayout, VertexState,
+    Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingType, BlendComponent, BlendState, Buffer, BufferBindingType,
+    BufferUsages, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
+    DepthStencilState, Device, Face, Features, FragmentState, FrontFace, InstanceDescriptor,
+    Limits, LoadOp, MultisampleState, Operations, PipelineLayout, PipelineLayoutDescriptor,
+    PolygonMode, PowerPreference, PresentMode, PrimitiveState, PrimitiveTopology, Queue,
+    RenderPassDepthStencilAttachment, RenderPipeline, RenderPipelineDescriptor,
+    RequestAdapterOptions, SamplerBindingType, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    StencilState, Surface, SurfaceConfiguration, TextureFormat, TextureSampleType, TextureUsages,
+    TextureViewDimension, VertexBufferLayout, VertexState,
 };
 
 use crate::camera::{Camera, CameraController, CameraUniform, Projection};
@@ -115,12 +115,10 @@ struct State {
     camera_bind_group: BindGroup,
     window: Window,
     instances: Vec<Instance>,
-    instance_buffer: Buffer,
     depth_texture: Texture,
     obj_model: Model,
     light_uniform: LightUniform,
     light_buffer: Buffer,
-    light_bind_group_layout: BindGroupLayout,
     light_bind_group: BindGroup,
     light_render_pipeline: RenderPipeline,
     glyph_brush: GlyphBrush<()>,
@@ -258,16 +256,6 @@ impl State {
             })
             .collect::<Vec<Instance>>();
 
-        let instance_data = instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<InstanceRaw>>();
-        let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: cast_slice(&instance_data),
-            usage: BufferUsages::VERTEX,
-        });
-
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
 
         let obj_model = load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
@@ -375,12 +363,10 @@ impl State {
             camera_uniform,
             window,
             instances,
-            instance_buffer,
             depth_texture,
             obj_model,
             light_uniform,
             light_buffer,
-            light_bind_group_layout,
             light_bind_group,
             light_render_pipeline,
             glyph_brush,
