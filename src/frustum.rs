@@ -188,9 +188,9 @@ impl FrustumCuller {
                     }
                 >= -self.pz_w
         {
-            return true;
+            true
+        } else {
+            false
         }
-
-        false
     }
 }
