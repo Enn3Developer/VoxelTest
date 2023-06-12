@@ -1,3 +1,4 @@
+use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3, Vec3A};
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
@@ -61,22 +62,13 @@ impl Projection {
         Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far)
     }
 
-    pub fn aspect(&self) -> f32 {
-        self.aspect
-    }
-    pub fn fov_y(&self) -> f32 {
-        self.fov_y
-    }
-    pub fn z_near(&self) -> f32 {
-        self.z_near
-    }
     pub fn z_far(&self) -> f32 {
         self.z_far
     }
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct CameraUniform {
     pub view_position: [f32; 4],
     pub view_proj: [[f32; 4]; 4],

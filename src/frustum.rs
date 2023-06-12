@@ -38,18 +38,9 @@ impl Aabb {
     pub fn from_params(min: Vec3, max: Vec3) -> Self {
         Self { min, max }
     }
-
-    #[inline]
-    pub fn new() -> Self {
-        Self::from_params(Vec3::ZERO, Vec3::ZERO)
-    }
 }
 
 impl FrustumCuller {
-    pub fn new() -> Self {
-        Self::from_matrix(Mat4::default())
-    }
-
     pub fn from_matrix(m: Mat4) -> Self {
         let mut culler: Self = unsafe { mem::zeroed() };
 
@@ -101,8 +92,7 @@ impl FrustumCuller {
                     aab.max.z
                 }
             >= -self.nx_w
-        {
-            if self.px_x
+            && self.px_x
                 * if self.px_x < 0.0 {
                     aab.min.x
                 } else {
@@ -121,93 +111,84 @@ impl FrustumCuller {
                         aab.max.z
                     }
                 >= -self.px_w
-            {
-                if self.ny_x
-                    * if self.ny_x < 0.0 {
-                        aab.min.x
-                    } else {
-                        aab.max.x
-                    }
-                    + self.ny_y
-                        * if self.ny_y < 0.0 {
-                            aab.min.y
-                        } else {
-                            aab.max.y
-                        }
-                    + self.ny_z
-                        * if self.ny_z < 0.0 {
-                            aab.min.z
-                        } else {
-                            aab.max.z
-                        }
-                    >= -self.ny_w
-                {
-                    if self.py_x
-                        * if self.py_x < 0.0 {
-                            aab.min.x
-                        } else {
-                            aab.max.x
-                        }
-                        + self.py_y
-                            * if self.py_y < 0.0 {
-                                aab.min.y
-                            } else {
-                                aab.max.y
-                            }
-                        + self.py_z
-                            * if self.py_z < 0.0 {
-                                aab.min.z
-                            } else {
-                                aab.max.z
-                            }
-                        >= -self.py_w
-                    {
-                        if self.nz_x
-                            * if self.nz_x < 0.0 {
-                                aab.min.x
-                            } else {
-                                aab.max.x
-                            }
-                            + self.nz_y
-                                * if self.nz_y < 0.0 {
-                                    aab.min.y
-                                } else {
-                                    aab.max.y
-                                }
-                            + self.nz_z
-                                * if self.nz_z < 0.0 {
-                                    aab.min.z
-                                } else {
-                                    aab.max.z
-                                }
-                            >= -self.nz_w
-                        {
-                            if self.pz_x
-                                * if self.pz_x < 0.0 {
-                                    aab.min.x
-                                } else {
-                                    aab.max.x
-                                }
-                                + self.pz_y
-                                    * if self.pz_y < 0.0 {
-                                        aab.min.y
-                                    } else {
-                                        aab.max.y
-                                    }
-                                + self.pz_z
-                                    * if self.pz_z < 0.0 {
-                                        aab.min.z
-                                    } else {
-                                        aab.max.z
-                                    }
-                                >= -self.pz_w
-                            {
-                                return true;
-                            }
-                        }
-                    }
+            && self.ny_x
+                * if self.ny_x < 0.0 {
+                    aab.min.x
+                } else {
+                    aab.max.x
                 }
-            }
+                + self.ny_y
+                    * if self.ny_y < 0.0 {
+                        aab.min.y
+                    } else {
+                        aab.max.y
+                    }
+                + self.ny_z
+                    * if self.ny_z < 0.0 {
+                        aab.min.z
+                    } else {
+                        aab.max.z
+                    }
+                >= -self.ny_w
+            && self.py_x
+                * if self.py_x < 0.0 {
+                    aab.min.x
+                } else {
+                    aab.max.x
+                }
+                + self.py_y
+                    * if self.py_y < 0.0 {
+                        aab.min.y
+                    } else {
+                        aab.max.y
+                    }
+                + self.py_z
+                    * if self.py_z < 0.0 {
+                        aab.min.z
+                    } else {
+                        aab.max.z
+                    }
+                >= -self.py_w
+            && self.nz_x
+                * if self.nz_x < 0.0 {
+                    aab.min.x
+                } else {
+                    aab.max.x
+                }
+                + self.nz_y
+                    * if self.nz_y < 0.0 {
+                        aab.min.y
+                    } else {
+                        aab.max.y
+                    }
+                + self.nz_z
+                    * if self.nz_z < 0.0 {
+                        aab.min.z
+                    } else {
+                        aab.max.z
+                    }
+                >= -self.nz_w
+            && self.pz_x
+                * if self.pz_x < 0.0 {
+                    aab.min.x
+                } else {
+                    aab.max.x
+                }
+                + self.pz_y
+                    * if self.pz_y < 0.0 {
+                        aab.min.y
+                    } else {
+                        aab.max.y
+                    }
+                + self.pz_z
+                    * if self.pz_z < 0.0 {
+                        aab.min.z
+                    } else {
+                        aab.max.z
+                    }
+                >= -self.pz_w
+        {
+            return true;
         }
 
         false
