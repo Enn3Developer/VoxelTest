@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3, Vec3A};
+use glam::{Mat4, Vec2, Vec3, Vec3A};
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::dpi::PhysicalPosition;
@@ -102,6 +102,7 @@ pub struct CameraController {
     amount_down: f32,
     rotate_horizontal: f32,
     rotate_vertical: f32,
+    samples: u32,
     scroll: f32,
     speed: f32,
     sensitivity: f32,
@@ -118,6 +119,7 @@ impl CameraController {
             amount_down: 0.0,
             rotate_horizontal: 0.0,
             rotate_vertical: 0.0,
+            samples: 0,
             scroll: 0.0,
             speed,
             sensitivity,
@@ -160,8 +162,9 @@ impl CameraController {
     }
 
     pub fn process_mouse(&mut self, mouse_dx: f64, mouse_dy: f64) {
-        self.rotate_horizontal = mouse_dx as f32;
-        self.rotate_vertical = mouse_dy as f32;
+        self.rotate_horizontal += mouse_dx as f32;
+        self.rotate_vertical += mouse_dy as f32;
+        self.samples += 1;
     }
 
     pub fn process_scroll(&mut self, delta: &MouseScrollDelta) {
@@ -197,14 +200,17 @@ impl CameraController {
         camera.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
 
         // Rotate
-        camera.yaw += self.rotate_horizontal * self.sensitivity * dt;
-        camera.pitch += -self.rotate_vertical * self.sensitivity * dt;
+        if self.samples > 0 {
+            camera.yaw += self.rotate_horizontal / self.samples as f32 * self.sensitivity * dt;
+            camera.pitch += -self.rotate_vertical / self.samples as f32 * self.sensitivity * dt;
 
-        // If process_mouse isn't called every frame, these values
-        // will not get set to zero, and the camera will rotate
-        // when moving in a non cardinal direction.
-        self.rotate_horizontal = 0.0;
-        self.rotate_vertical = 0.0;
+            // If process_mouse isn't called every frame, these values
+            // will not get set to zero, and the camera will rotate
+            // when moving in a non cardinal direction.
+            self.rotate_horizontal = 0.0;
+            self.rotate_vertical = 0.0;
+            self.samples = 0;
+        }
 
         // Keep the camera's angle from going too high/low.
         if camera.pitch < -SAFE_FRAC_PI_2 {

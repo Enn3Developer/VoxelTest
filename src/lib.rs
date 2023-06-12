@@ -1,10 +1,18 @@
 #![allow(non_snake_case)]
 
+use crate::camera::{Camera, CameraController, CameraUniform, Projection};
+use crate::frustum::FrustumCuller;
+use crate::instance::{Instance, InstanceRaw, NUM_INSTANCES_PER_ROW, SPACE_BETWEEN};
+use crate::light::LightUniform;
+use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex};
+use crate::resource::load_model;
+use crate::texture::Texture;
 use bytemuck::cast_slice;
 use glam::{Mat4, Quat, Vec3, Vec3A};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::iter;
 use std::time::{Duration, Instant};
+use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
 use wgpu::{
     Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, BlendComponent, BlendState, Buffer, BufferBindingType,
@@ -17,15 +25,6 @@ use wgpu::{
     StencilState, Surface, SurfaceConfiguration, TextureFormat, TextureSampleType, TextureUsages,
     TextureViewDimension, VertexBufferLayout, VertexState,
 };
-
-use crate::camera::{Camera, CameraController, CameraUniform, Projection};
-use crate::frustum::FrustumCuller;
-use crate::instance::{Instance, InstanceRaw, NUM_INSTANCES_PER_ROW, SPACE_BETWEEN};
-use crate::light::LightUniform;
-use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex};
-use crate::resource::load_model;
-use crate::texture::Texture;
-use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
 use wgpu_glyph::ab_glyph::FontArc;
 use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder, Section, Text};
 use winit::dpi::PhysicalSize;
@@ -175,11 +174,7 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: *surface_caps
-                .present_modes
-                .iter()
-                .find(|present_mode| present_mode == &&PresentMode::Immediate)
-                .unwrap(),
+            present_mode: PresentMode::AutoNoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
