@@ -25,7 +25,9 @@ use crate::light::LightUniform;
 use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex};
 use crate::resource::load_model;
 use crate::texture::Texture;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
+use wgpu_glyph::ab_glyph::FontArc;
+use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder, Section, Text};
 use winit::dpi::PhysicalSize;
 use winit::{
     event::*,
@@ -121,6 +123,11 @@ struct State {
     light_bind_group_layout: BindGroupLayout,
     light_bind_group: BindGroup,
     light_render_pipeline: RenderPipeline,
+    glyph_brush: GlyphBrush<()>,
+    staging_belt: StagingBelt,
+    fps: u32,
+    calc_fps: u32,
+    last_time: f32,
 }
 
 impl State {
@@ -343,7 +350,17 @@ impl State {
             )
         };
 
+        let font = FontArc::try_from_slice(include_bytes!("../fonts/FiraSans-Regular.ttf"))
+            .expect("Can't load font");
+
+        let glyph_brush = GlyphBrushBuilder::using_font(font).build(&device, surface_format);
+        let staging_belt = StagingBelt::new(1024);
+
         Self {
+            mouse_pressed: false,
+            fps: 0,
+            calc_fps: 0,
+            last_time: 0.0,
             surface,
             device,
             queue,
@@ -353,7 +370,6 @@ impl State {
             camera,
             projection,
             camera_controller,
-            mouse_pressed: false,
             camera_buffer,
             camera_bind_group,
             camera_uniform,
@@ -367,6 +383,8 @@ impl State {
             light_bind_group_layout,
             light_bind_group,
             light_render_pipeline,
+            glyph_brush,
+            staging_belt,
         }
     }
 
@@ -428,6 +446,15 @@ impl State {
         );
         self.queue
             .write_buffer(&self.light_buffer, 0, cast_slice(&[self.light_uniform]));
+
+        self.last_time += dt.as_secs_f32();
+        self.calc_fps += 1;
+
+        if self.last_time >= 1.0 {
+            self.fps = self.calc_fps;
+            self.calc_fps = 0;
+            self.last_time = 0.0;
+        }
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -507,8 +534,28 @@ impl State {
             );
         }
 
+        self.glyph_brush.queue(Section {
+            screen_position: (30.0, 30.0),
+            bounds: (self.config.width as f32, self.config.height as f32),
+            text: vec![Text::new(&format!("fps: {}", self.fps)).with_color([1.0, 1.0, 1.0, 1.0])],
+            ..Default::default()
+        });
+
+        self.glyph_brush
+            .draw_queued(
+                &self.device,
+                &mut self.staging_belt,
+                &mut encoder,
+                &view,
+                self.config.width,
+                self.config.height,
+            )
+            .expect("Can't draw text");
+
+        self.staging_belt.finish();
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
+        self.staging_belt.recall();
 
         Ok(())
     }
@@ -563,8 +610,6 @@ pub async fn run() {
                 let now = Instant::now();
                 let dt = now - last_render_time;
                 last_render_time = now;
-                #[cfg(debug_assertions)]
-                println!("fps: {:.0}", 1.0 / dt.as_secs_f64());
                 state.update(dt);
                 match state.render() {
                     Ok(_) => {}
