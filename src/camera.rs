@@ -210,13 +210,13 @@ impl CameraController {
             self.rotate_horizontal = 0.0;
             self.rotate_vertical = 0.0;
             self.samples = 0;
-        }
 
-        // Keep the camera's angle from going too high/low.
-        if camera.pitch < -SAFE_FRAC_PI_2 {
-            camera.pitch = -SAFE_FRAC_PI_2;
-        } else if camera.pitch > SAFE_FRAC_PI_2 {
-            camera.pitch = SAFE_FRAC_PI_2;
+            // Keep the camera's angle from going too high/low.
+            if camera.pitch < -SAFE_FRAC_PI_2 {
+                camera.pitch = -SAFE_FRAC_PI_2;
+            } else if camera.pitch > SAFE_FRAC_PI_2 {
+                camera.pitch = SAFE_FRAC_PI_2;
+            }
         }
     }
 }

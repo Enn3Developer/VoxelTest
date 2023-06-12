@@ -34,9 +34,11 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+mod app;
 mod assets;
 mod camera;
 mod frustum;
+mod input;
 mod instance;
 mod light;
 mod model;
