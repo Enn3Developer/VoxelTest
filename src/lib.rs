@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+use crate::app::App;
 use crate::camera::{Camera, CameraController, CameraUniform, Projection};
 use crate::frustum::FrustumCuller;
 use crate::instance::{Instance, InstanceRaw, NUM_INSTANCES_PER_ROW, SPACE_BETWEEN};
@@ -45,7 +46,7 @@ mod model;
 mod resource;
 mod texture;
 
-fn create_render_pipeline(
+pub fn create_render_pipeline(
     device: &Device,
     layout: &PipelineLayout,
     color_format: TextureFormat,
@@ -553,7 +554,8 @@ pub async fn run() {
         .build(&event_loop)
         .unwrap();
 
-    let mut state = State::new(window).await;
+    // let mut state = State::new(window).await;
+    let mut app = App::new(window).await;
     let mut last_render_time = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
@@ -563,14 +565,14 @@ pub async fn run() {
                 event: DeviceEvent::MouseMotion { delta },
                 ..
             } => {
-                if state.mouse_pressed {
-                    state.camera_controller.process_mouse(delta.0, delta.1)
-                }
+                // if state.mouse_pressed {
+                //     state.camera_controller.process_mouse(delta.0, delta.1)
+                // }
             }
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == state.window().id() && !state.input(event) => match event {
+            } if window_id == app.window().id() && !app.input(event) => match event {
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {
                     input:
@@ -582,29 +584,29 @@ pub async fn run() {
                     ..
                 } => *control_flow = ControlFlow::Exit,
                 WindowEvent::Resized(physical_size) => {
-                    state.resize(*physical_size);
+                    app.resize(*physical_size);
                 }
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    state.resize(**new_inner_size);
+                    app.resize(**new_inner_size);
                 }
                 _ => {}
             },
-            Event::RedrawRequested(window_id) if window_id == state.window().id() => {
+            Event::RedrawRequested(window_id) if window_id == app.window().id() => {
                 let now = Instant::now();
                 let dt = now - last_render_time;
                 last_render_time = now;
-                state.update(dt);
-                match state.render() {
+                app.update(dt);
+                match app.render() {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        state.resize(state.size)
+                        app.resize(app.size())
                     }
                     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                     Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
                 }
             }
             Event::MainEventsCleared => {
-                state.window().request_redraw();
+                app.window().request_redraw();
             }
             _ => {}
         }

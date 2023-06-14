@@ -1,3 +1,5 @@
+use winit::event::WindowEvent;
+
 pub struct InputState {}
 
 impl InputState {
@@ -6,4 +8,8 @@ impl InputState {
     }
 
     pub fn clear(&mut self) {}
+
+    pub fn input(&mut self, event: &WindowEvent) -> bool {
+        false
+    }
 }
