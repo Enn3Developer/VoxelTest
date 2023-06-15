@@ -3,9 +3,11 @@ use crate::command_buffer::{CommandBuffer, NCommand};
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
 use crate::texture::Texture;
+use crate::ui::{Label, UI};
 use bytemuck::cast_slice;
 use glam::{Mat4, Vec3A};
 use std::iter;
+use std::rc::Rc;
 use std::slice::{Iter, IterMut};
 use std::time::Duration;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
@@ -73,14 +75,13 @@ pub struct App {
     input_state: InputState,
 
     surface: Surface,
-    device: Device,
+    device: Rc<Device>,
     queue: Queue,
     config: SurfaceConfiguration,
     size: PhysicalSize<u32>,
     window: Window,
-    glyph_brush: GlyphBrush<()>,
-    staging_belt: StagingBelt,
     depth_texture: Texture,
+    ui: UI,
 
     camera: Camera,
     projection: Projection,
@@ -89,7 +90,7 @@ pub struct App {
     camera_bind_group: BindGroup,
     camera_controller: CameraController,
 
-    fps: u32,
+    fps_label: Label,
     calc_fps: u32,
     last_time: f32,
 }
@@ -128,6 +129,8 @@ impl App {
             )
             .await
             .unwrap();
+
+        let device = Rc::new(device);
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps
@@ -186,11 +189,16 @@ impl App {
             label: Some("camera_bind_group"),
         });
 
-        let font = FontArc::try_from_slice(include_bytes!("../fonts/FiraSans-Regular.ttf"))
-            .expect("Can't load font");
+        let ui = UI::new(
+            include_bytes!("../fonts/FiraSans-Regular.ttf"),
+            device.clone(),
+            surface_format,
+        );
 
-        let glyph_brush = GlyphBrushBuilder::using_font(font).build(&device, surface_format);
-        let staging_belt = StagingBelt::new(1024);
+        let fps_label = Label::default()
+            .with_position((10.0, 10.0))
+            .with_bounds((config.width as f32, config.height as f32))
+            .with_text("000 fps");
 
         Self {
             actors: ActorState::new(),
@@ -203,9 +211,8 @@ impl App {
             config,
             size,
             window,
-            glyph_brush,
-            staging_belt,
             depth_texture,
+            ui,
 
             camera,
             projection,
@@ -214,7 +221,7 @@ impl App {
             camera_uniform,
             camera_controller,
 
-            fps: 0,
+            fps_label,
             calc_fps: 0,
             last_time: 0.0,
         }
@@ -281,7 +288,7 @@ impl App {
         self.calc_fps += 1;
 
         if self.last_time >= 1.0 {
-            self.fps = self.calc_fps;
+            self.fps_label.set_text(format!("{} fps", self.calc_fps));
             self.calc_fps = 0;
             self.last_time = 0.0;
         }
@@ -342,28 +349,15 @@ impl App {
                 .for_each(|model| model.render(&mut render_pass, &self.device));
         }
 
-        self.glyph_brush.queue(Section {
-            screen_position: (10.0, 10.0),
-            bounds: (self.config.width as f32, self.config.height as f32),
-            text: vec![Text::new(&format!("fps: {}", self.fps)).with_color([1.0, 1.0, 1.0, 1.0])],
-            ..Default::default()
-        });
+        self.ui.render(&self.fps_label);
+        self.ui
+            .draw(&mut encoder, &view, self.config.width, self.config.height)
+            .expect("can't draw");
 
-        self.glyph_brush
-            .draw_queued(
-                &self.device,
-                &mut self.staging_belt,
-                &mut encoder,
-                &view,
-                self.config.width,
-                self.config.height,
-            )
-            .expect("Can't draw text");
-
-        self.staging_belt.finish();
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
-        self.staging_belt.recall();
+
+        self.ui.recall();
 
         Ok(())
     }

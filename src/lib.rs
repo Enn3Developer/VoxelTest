@@ -46,6 +46,7 @@ mod light;
 mod model;
 mod resource;
 mod texture;
+mod ui;
 
 pub fn create_render_pipeline(
     device: &Device,
