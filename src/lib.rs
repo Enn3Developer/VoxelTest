@@ -38,6 +38,7 @@ use winit::{
 mod app;
 mod assets;
 mod camera;
+mod command_buffer;
 mod frustum;
 mod input;
 mod instance;

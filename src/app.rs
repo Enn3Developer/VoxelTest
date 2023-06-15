@@ -1,10 +1,12 @@
 use crate::camera::{Camera, CameraController, CameraUniform, Projection};
+use crate::command_buffer::{CommandBuffer, NCommand};
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
 use crate::texture::Texture;
 use bytemuck::cast_slice;
 use glam::{Mat4, Vec3A};
 use std::iter;
+use std::slice::{Iter, IterMut};
 use std::time::Duration;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
 use wgpu::{
@@ -21,7 +23,7 @@ use winit::event::WindowEvent;
 use winit::window::Window;
 
 pub trait Actor {
-    fn update(&mut self, dt: &Duration, input_state: &InputState, queue: &Queue);
+    fn update(&mut self, dt: &Duration, input_state: &InputState, queue: &Queue) -> CommandBuffer;
 }
 pub trait Model {
     fn aabb(&self) -> &Aabb;
@@ -29,9 +31,45 @@ pub trait Model {
     fn render(&self, render_pass: &mut RenderPass, device: &Device);
 }
 
-pub struct App {
-    actors: Vec<Box<dyn Actor>>,
+pub struct ModelState {
     models: Vec<Box<dyn Model>>,
+}
+
+impl ModelState {
+    pub fn new() -> Self {
+        Self { models: vec![] }
+    }
+
+    pub fn push(&mut self, model: Box<dyn Model>) {
+        self.models.push(model);
+    }
+
+    pub fn iter_models(&self) -> Iter<'_, Box<dyn Model>> {
+        self.models.iter()
+    }
+}
+
+pub struct ActorState {
+    actors: Vec<Box<dyn Actor>>,
+}
+
+impl ActorState {
+    pub fn new() -> Self {
+        Self { actors: vec![] }
+    }
+
+    pub fn push(&mut self, actor: Box<dyn Actor>) {
+        self.actors.push(actor);
+    }
+
+    pub fn iter_mut_actors(&mut self) -> IterMut<'_, Box<dyn Actor>> {
+        self.actors.iter_mut()
+    }
+}
+
+pub struct App {
+    actors: ActorState,
+    models: ModelState,
     input_state: InputState,
 
     surface: Surface,
@@ -155,8 +193,8 @@ impl App {
         let staging_belt = StagingBelt::new(1024);
 
         Self {
-            actors: vec![],
-            models: vec![],
+            actors: ActorState::new(),
+            models: ModelState::new(),
             input_state: InputState::new(),
 
             surface,
@@ -190,7 +228,7 @@ impl App {
         self.actors.push(actor);
     }
 
-    pub(crate) fn resize(&mut self, new_size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.config.width = new_size.width;
@@ -204,8 +242,19 @@ impl App {
         }
     }
 
-    pub(crate) fn input(&mut self, event: &WindowEvent) -> bool {
+    pub fn input(&mut self, event: &WindowEvent) -> bool {
         self.input_state.input(event)
+    }
+
+    pub fn parse_command(&mut self, command: NCommand) {
+        match command {
+            NCommand::CreateModel(model) => {
+                self.models.push(model);
+            }
+            NCommand::CreateActor(actor) => {
+                self.actors.push(actor);
+            }
+        }
     }
 
     pub fn update(&mut self, dt: Duration) {
@@ -215,8 +264,17 @@ impl App {
         self.queue
             .write_buffer(&self.camera_buffer, 0, cast_slice(&[self.camera_uniform]));
 
-        for actor in self.actors.iter_mut() {
-            actor.update(&dt, &self.input_state, &self.queue);
+        let mut buffers = vec![];
+
+        for actor in self.actors.iter_mut_actors() {
+            let command_buffer = actor.update(&dt, &self.input_state, &self.queue);
+            buffers.push(command_buffer);
+        }
+
+        for command_buffer in buffers {
+            for command in command_buffer.iter_command() {
+                self.parse_command(command);
+            }
         }
 
         self.last_time += dt.as_secs_f32();
@@ -272,8 +330,10 @@ impl App {
                 }),
             });
 
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+
             self.models
-                .iter()
+                .iter_models()
                 .filter(|model| culling.test_bounding_box(model.aabb()))
                 .filter(|model| {
                     model.position().distance_squared(self.camera.position())
