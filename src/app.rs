@@ -198,7 +198,7 @@ impl App {
         let fps_label = Label::default()
             .with_position((10.0, 10.0))
             .with_bounds((config.width as f32, config.height as f32))
-            .with_text("000 fps");
+            .with_text("0 fps");
 
         Self {
             actors: ActorState::new(),
