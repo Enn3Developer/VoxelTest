@@ -5,6 +5,8 @@ use std::time::Duration;
 use winit::dpi::PhysicalPosition;
 use winit::event::{ElementState, MouseScrollDelta, VirtualKeyCode};
 
+use crate::input::InputState;
+
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
 pub struct Camera {
@@ -126,56 +128,59 @@ impl CameraController {
         }
     }
 
-    pub fn process_keyboard(&mut self, key: VirtualKeyCode, state: ElementState) -> bool {
-        let amount = if state == ElementState::Pressed {
-            1.0
-        } else {
-            0.0
-        };
-        match key {
-            VirtualKeyCode::W | VirtualKeyCode::Up => {
-                self.amount_forward = amount;
-                true
-            }
-            VirtualKeyCode::S | VirtualKeyCode::Down => {
-                self.amount_backward = amount;
-                true
-            }
-            VirtualKeyCode::A | VirtualKeyCode::Left => {
-                self.amount_left = amount;
-                true
-            }
-            VirtualKeyCode::D | VirtualKeyCode::Right => {
-                self.amount_right = amount;
-                true
-            }
-            VirtualKeyCode::Space => {
-                self.amount_up = amount;
-                true
-            }
-            VirtualKeyCode::LShift => {
-                self.amount_down = amount;
-                true
-            }
-            _ => false,
+    pub fn process_keyboard(&mut self, inputs: &InputState) {
+        if inputs.is_key_just_pressed(&VirtualKeyCode::W) {
+            self.amount_forward = 1.0;
+        } else if inputs.is_key_just_released(&VirtualKeyCode::W) {
+            self.amount_forward = 0.0;
+        }
+
+        if inputs.is_key_just_pressed(&VirtualKeyCode::S) {
+            self.amount_backward = 1.0;
+        } else if inputs.is_key_just_released(&VirtualKeyCode::S) {
+            self.amount_backward = 0.0;
+        }
+
+        if inputs.is_key_just_pressed(&VirtualKeyCode::A) {
+            self.amount_left = 1.0;
+        } else if inputs.is_key_just_released(&VirtualKeyCode::A) {
+            self.amount_left = 0.0;
+        }
+
+        if inputs.is_key_just_pressed(&VirtualKeyCode::D) {
+            self.amount_right = 1.0;
+        } else if inputs.is_key_just_released(&VirtualKeyCode::D) {
+            self.amount_right = 0.0;
+        }
+
+        if inputs.is_key_just_pressed(&VirtualKeyCode::Space) {
+            self.amount_up = 1.0;
+        } else if inputs.is_key_just_released(&VirtualKeyCode::Space) {
+            self.amount_up = 0.0;
+        }
+
+        if inputs.is_key_just_pressed(&VirtualKeyCode::LShift) {
+            self.amount_down = 1.0;
+        } else if inputs.is_key_just_released(&VirtualKeyCode::LShift) {
+            self.amount_down = 0.0;
         }
     }
 
-    pub fn process_mouse(&mut self, mouse_dx: f64, mouse_dy: f64) {
-        self.rotate_horizontal += mouse_dx as f32;
-        self.rotate_vertical += mouse_dy as f32;
-        self.samples += 1;
+    pub fn process_mouse(&mut self, inputs: &InputState) {
+        let delta = inputs.mouse_delta();
+        self.rotate_horizontal = delta.0;
+        self.rotate_vertical = delta.1;
     }
 
-    pub fn process_scroll(&mut self, delta: &MouseScrollDelta) {
-        self.scroll = -match delta {
-            // I'm assuming a line is about 100 pixels
-            MouseScrollDelta::LineDelta(_, scroll) => scroll * 100.0,
-            MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => *scroll as f32,
-        };
+    pub fn process_scroll(&mut self, inputs: &InputState) {
+        self.scroll = inputs.mouse_scroll();
     }
 
-    pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
+    pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration, inputs: &InputState) {
+        self.process_keyboard(inputs);
+        self.process_mouse(inputs);
+        self.process_scroll(inputs);
+
         let dt = dt.as_secs_f32();
 
         // Move forward/backward and left/right
@@ -192,7 +197,7 @@ impl CameraController {
         let (pitch_sin, pitch_cos) = camera.pitch.sin_cos();
         let scrollward =
             Vec3A::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
-        camera.position += -scrollward * self.scroll * self.speed * self.sensitivity * dt;
+        camera.position += scrollward * self.scroll * self.speed * self.sensitivity * dt;
         self.scroll = 0.0;
 
         // Move up/down. Since we don't use roll, we can just

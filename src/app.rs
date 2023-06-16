@@ -265,7 +265,7 @@ impl App {
     }
 
     pub fn update(&mut self, dt: Duration) {
-        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.camera_controller.update_camera(&mut self.camera, dt, &self.input_state);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);
         self.queue
@@ -293,7 +293,7 @@ impl App {
             self.last_time = 0.0;
         }
 
-        self.input_state.clear();
+        self.input_state.update();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
