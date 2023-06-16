@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::app::App;
+use camera::CameraController;
 use std::time::Instant;
 use wgpu::{
     BlendComponent, BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
@@ -17,6 +18,7 @@ use winit::{
 mod app;
 mod assets;
 mod camera;
+mod chunks;
 mod command_buffer;
 mod frustum;
 mod input;
@@ -93,6 +95,8 @@ pub async fn run() {
 
     // let mut state = State::new(window).await;
     let mut app = App::new(window).await;
+    let camera_controller = Box::new(CameraController::new(4.0, 1.0, app.camera()));
+    app.add_actor(camera_controller);
     let mut last_render_time = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {

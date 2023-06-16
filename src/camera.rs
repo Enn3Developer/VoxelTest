@@ -1,10 +1,14 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec2, Vec3, Vec3A};
+use glam::{Mat4, Vec3, Vec3A};
+use std::cell::RefCell;
 use std::f32::consts::FRAC_PI_2;
+use std::rc::Rc;
 use std::time::Duration;
-use winit::dpi::PhysicalPosition;
-use winit::event::{ElementState, MouseScrollDelta, VirtualKeyCode};
+use uuid::Uuid;
+use winit::event::VirtualKeyCode;
 
+use crate::app::Actor;
+use crate::command_buffer::{CommandBuffer, NCommandUpdate};
 use crate::input::InputState;
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
@@ -36,6 +40,23 @@ impl Camera {
 
     pub fn position(&self) -> Vec3A {
         self.position
+    }
+
+    pub fn move_position(&mut self, offset: Vec3A) {
+        self.position += offset;
+    }
+
+    pub fn add_yaw(&mut self, yaw: f32) {
+        self.yaw += yaw;
+    }
+
+    pub fn add_pitch(&mut self, pitch: f32) {
+        self.pitch += pitch;
+        if self.pitch < -SAFE_FRAC_PI_2 {
+            self.pitch = -SAFE_FRAC_PI_2;
+        } else if self.pitch > SAFE_FRAC_PI_2 {
+            self.pitch = SAFE_FRAC_PI_2;
+        }
     }
 }
 
@@ -104,15 +125,17 @@ pub struct CameraController {
     amount_down: f32,
     rotate_horizontal: f32,
     rotate_vertical: f32,
-    samples: u32,
     scroll: f32,
     speed: f32,
     sensitivity: f32,
+    id: Uuid,
+    camera: Rc<RefCell<Camera>>,
 }
 
 impl CameraController {
-    pub fn new(speed: f32, sensitivity: f32) -> Self {
+    pub fn new(speed: f32, sensitivity: f32, camera: Rc<RefCell<Camera>>) -> Self {
         Self {
+            id: Uuid::new_v4(),
             amount_left: 0.0,
             amount_right: 0.0,
             amount_forward: 0.0,
@@ -121,10 +144,10 @@ impl CameraController {
             amount_down: 0.0,
             rotate_horizontal: 0.0,
             rotate_vertical: 0.0,
-            samples: 0,
             scroll: 0.0,
             speed,
             sensitivity,
+            camera,
         }
     }
 
@@ -205,23 +228,60 @@ impl CameraController {
         camera.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
 
         // Rotate
-        if self.samples > 0 {
-            camera.yaw += self.rotate_horizontal / self.samples as f32 * self.sensitivity * dt;
-            camera.pitch += -self.rotate_vertical / self.samples as f32 * self.sensitivity * dt;
+        camera.yaw += self.rotate_horizontal * self.sensitivity * dt;
+        camera.pitch += -self.rotate_vertical * self.sensitivity * dt;
 
-            // If process_mouse isn't called every frame, these values
-            // will not get set to zero, and the camera will rotate
-            // when moving in a non cardinal direction.
-            self.rotate_horizontal = 0.0;
-            self.rotate_vertical = 0.0;
-            self.samples = 0;
+        // If process_mouse isn't called every frame, these values
+        // will not get set to zero, and the camera will rotate
+        // when moving in a non cardinal direction.
+        self.rotate_horizontal = 0.0;
+        self.rotate_vertical = 0.0;
 
-            // Keep the camera's angle from going too high/low.
-            if camera.pitch < -SAFE_FRAC_PI_2 {
-                camera.pitch = -SAFE_FRAC_PI_2;
-            } else if camera.pitch > SAFE_FRAC_PI_2 {
-                camera.pitch = SAFE_FRAC_PI_2;
-            }
+        // Keep the camera's angle from going too high/low.
+        if camera.pitch < -SAFE_FRAC_PI_2 {
+            camera.pitch = -SAFE_FRAC_PI_2;
+        } else if camera.pitch > SAFE_FRAC_PI_2 {
+            camera.pitch = SAFE_FRAC_PI_2;
         }
+    }
+}
+
+impl Actor for CameraController {
+    fn id(&self) -> Uuid {
+        self.id.clone()
+    }
+
+    fn update(&mut self, dt: &Duration, inputs: &InputState) -> CommandBuffer<NCommandUpdate> {
+        let mut buffer = CommandBuffer::new();
+        let dt = dt.as_secs_f32();
+
+        self.process_keyboard(inputs);
+        self.process_mouse(inputs);
+        self.process_scroll(inputs);
+
+        // Move forward/backward and left/right
+        let (yaw_sin, yaw_cos) = self.camera.borrow().yaw.sin_cos();
+        let forward = Vec3A::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let right = Vec3A::new(-yaw_sin, 0.0, yaw_cos).normalize();
+        let mut offset = Vec3A::ZERO;
+        offset += forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
+        offset += right * (self.amount_right - self.amount_left) * self.speed * dt;
+
+        // Move in/out (aka. "zoom")
+        let (pitch_sin, pitch_cos) = self.camera.borrow().pitch.sin_cos();
+        let scrollward =
+            Vec3A::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+        offset += scrollward * self.scroll * self.speed * self.sensitivity * dt;
+
+        // Move up/down.
+        offset.y += (self.amount_up - self.amount_down) * self.speed * dt;
+
+        buffer.push(NCommandUpdate::MoveCamera(offset));
+        buffer.push(NCommandUpdate::RotateCamera(
+            self.rotate_horizontal * self.sensitivity * dt,
+            -self.rotate_vertical * self.sensitivity * dt,
+        ));
+
+        buffer
     }
 }

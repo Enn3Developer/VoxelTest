@@ -43,7 +43,9 @@ fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
 
     let scale = 0.5;
 
-    let world_position = model_matrix * vec4<f32>((model.position + chunk_pos) * scale, 1.0);
+    let position = vec3<f32>(model.position >> 6, (model.position >> 3) & 0b111, model.position & 0b111);
+
+    let world_position = model_matrix * vec4<f32>((position + chunk_pos) * scale, 1.0);
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * world_position;

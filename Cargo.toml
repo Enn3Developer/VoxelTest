@@ -19,6 +19,7 @@ rayon = "1.7.0"
 tobj = {version = "4.0.0", features = ["async"]}
 rust-embed = { version = "6.6.1", features = ["compression"] }
 flume = "0.10.14"
+uuid = { version = "1.3.4", features = ["v4", "fast-rng"] }
 
 [dependencies.image]
 version = "0.24.6"

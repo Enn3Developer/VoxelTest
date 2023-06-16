@@ -1,36 +1,44 @@
-use crate::camera::{Camera, CameraController, CameraUniform, Projection};
-use crate::command_buffer::{CommandBuffer, NCommand};
+use crate::camera::{Camera, CameraUniform, Projection};
+use crate::command_buffer::{CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate};
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
 use crate::texture::Texture;
 use crate::ui::{Label, UI};
 use bytemuck::cast_slice;
 use glam::{Mat4, Vec3A};
+use std::cell::RefCell;
 use std::iter;
 use std::rc::Rc;
 use std::slice::{Iter, IterMut};
 use std::time::Duration;
+use uuid::Uuid;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages, Color, Device,
-    Features, InstanceDescriptor, Limits, LoadOp, Operations, PowerPreference, PresentMode, Queue,
-    RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RequestAdapterOptions, ShaderStages, Surface, SurfaceConfiguration, TextureUsages,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages, Color,
+    CommandEncoderDescriptor, Device, Features, InstanceDescriptor, Limits, LoadOp, Operations,
+    PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
+    Surface, SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
+// TODO: implement buffers for everything (update, setup render, render)
+// TODO: abstract render work from Model
+
 pub trait Actor {
-    fn id(&self) -> usize;
-    fn update(&mut self, dt: &Duration, input_state: &InputState, queue: &Queue) -> CommandBuffer;
+    fn id(&self) -> Uuid;
+    fn update(&mut self, dt: &Duration, input_state: &InputState) -> CommandBuffer<NCommandUpdate>;
 }
+
 pub trait Model {
-    fn id(&self) -> usize;
+    fn id(&self) -> Uuid;
     fn aabb(&self) -> &Aabb;
     fn position(&self) -> &Vec3A;
-    fn render(&self, render_pass: &mut RenderPass, device: &Device);
+    fn setup(&self) -> CommandBuffer<NCommandSetup>;
+    fn render(&self) -> CommandBuffer<NCommandRender>;
 }
 
 pub struct ModelState {
@@ -95,12 +103,11 @@ pub struct App {
     depth_texture: Texture,
     ui: UI,
 
-    camera: Camera,
+    camera: Rc<RefCell<Camera>>,
     projection: Projection,
     camera_uniform: CameraUniform,
     camera_buffer: Buffer,
     camera_bind_group: BindGroup,
-    camera_controller: CameraController,
 
     fps_label: Label,
     calc_fps: u32,
@@ -164,12 +171,11 @@ impl App {
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
 
-        let camera = Camera::new((0.0, 5.0, 10.0), -1.57, -0.35);
+        let camera = Rc::new(RefCell::new(Camera::new((0.0, 5.0, 10.0), -1.57, -0.35)));
         let projection = Projection::new(config.width, config.height, 0.78, 0.1, 1000.0);
-        let camera_controller = CameraController::new(4.0, 1.0);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera, &projection);
+        camera_uniform.update_view_proj(&camera.borrow(), &projection);
 
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -231,7 +237,6 @@ impl App {
             camera_buffer,
             camera_bind_group,
             camera_uniform,
-            camera_controller,
 
             fps_label,
             calc_fps: 0,
@@ -245,6 +250,10 @@ impl App {
 
     pub fn add_actor(&mut self, actor: Box<dyn Actor>) {
         self.actors.push(actor);
+    }
+
+    pub fn camera(&self) -> Rc<RefCell<Camera>> {
+        self.camera.clone()
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -265,15 +274,15 @@ impl App {
         self.input_state.input(event)
     }
 
-    pub fn parse_command(&mut self, command: NCommand) {
+    pub fn parse_command(&mut self, command: NCommandUpdate) {
         match command {
-            NCommand::CreateModel(model) => {
+            NCommandUpdate::CreateModel(model) => {
                 self.models.push(model);
             }
-            NCommand::CreateActor(actor) => {
+            NCommandUpdate::CreateActor(actor) => {
                 self.actors.push(actor);
             }
-            NCommand::RemoveModel(id) => {
+            NCommandUpdate::RemoveModel(id) => {
                 let mut idx = None;
                 for (i, model) in self.models.iter_models().enumerate() {
                     if model.id() == id {
@@ -285,7 +294,7 @@ impl App {
                     self.models.remove(i);
                 }
             }
-            NCommand::RemoveActor(id) => {
+            NCommandUpdate::RemoveActor(id) => {
                 let mut idx = None;
                 for (i, actor) in self.actors.iter_actors().enumerate() {
                     if actor.id() == id {
@@ -297,21 +306,23 @@ impl App {
                     self.actors.remove(i);
                 }
             }
+            NCommandUpdate::MoveCamera(offset) => {
+                self.camera.borrow_mut().move_position(offset);
+            }
+            NCommandUpdate::RotateCamera(yaw, pitch) => {
+                self.camera.borrow_mut().add_yaw(yaw);
+                self.camera.borrow_mut().add_pitch(pitch);
+            }
+            NCommandUpdate::FovCamera(_fov) => {}
         }
     }
 
     pub fn update(&mut self, dt: Duration) {
-        self.camera_controller
-            .update_camera(&mut self.camera, dt, &self.input_state);
-        self.camera_uniform
-            .update_view_proj(&self.camera, &self.projection);
-        self.queue
-            .write_buffer(&self.camera_buffer, 0, cast_slice(&[self.camera_uniform]));
-
         let mut buffers = vec![];
 
+        // TODO: this may be parallilazible now
         for actor in self.actors.iter_mut_actors() {
-            let command_buffer = actor.update(&dt, &self.input_state, &self.queue);
+            let command_buffer = actor.update(&dt, &self.input_state);
             buffers.push(command_buffer);
         }
 
@@ -320,6 +331,11 @@ impl App {
                 self.parse_command(command);
             }
         }
+
+        self.camera_uniform
+            .update_view_proj(&self.camera.borrow(), &self.projection);
+        self.queue
+            .write_buffer(&self.camera_buffer, 0, cast_slice(&[self.camera_uniform]));
 
         self.last_time += dt.as_secs_f32();
         self.calc_fps += 1;
@@ -337,11 +353,11 @@ impl App {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+            .create_view(&TextureViewDescriptor::default());
 
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
@@ -376,14 +392,18 @@ impl App {
 
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
+            // TODO: this may be parallilazible now
             self.models
                 .iter_models()
                 .filter(|model| culling.test_bounding_box(model.aabb()))
                 .filter(|model| {
-                    model.position().distance_squared(self.camera.position())
+                    model
+                        .position()
+                        .distance_squared(self.camera.borrow().position())
                         < self.projection.z_far().powi(2)
                 })
-                .for_each(|model| model.render(&mut render_pass, &self.device));
+                .map(|model| model.render())
+                .for_each(|_command_buffer| {});
         }
 
         self.ui.render(&self.fps_label);

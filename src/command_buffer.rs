@@ -1,30 +1,49 @@
-use std::{slice::Iter, vec::IntoIter};
-
 use glam::Vec3A;
+use std::vec::IntoIter;
+use uuid::Uuid;
 
 use crate::app::{Actor, Model};
 
-pub enum NCommand {
+pub trait NCommand {}
+
+pub enum NCommandUpdate {
     CreateModel(Box<dyn Model>),
     CreateActor(Box<dyn Actor>),
-    RemoveModel(usize),
-    RemoveActor(usize),
+    RemoveModel(Uuid),
+    RemoveActor(Uuid),
+    MoveCamera(Vec3A),
+    RotateCamera(f32, f32),
+    FovCamera(f32),
 }
 
-pub struct CommandBuffer {
-    commands: Vec<NCommand>,
+impl NCommand for NCommandUpdate {}
+
+pub enum NCommandSetup {
+    CreatePipeline(/*TODO: add the necessary data*/),
 }
 
-impl CommandBuffer {
+impl NCommand for NCommandSetup {}
+
+pub enum NCommandRender {
+    // TODO: add all the possible commands
+}
+
+impl NCommand for NCommandRender {}
+
+pub struct CommandBuffer<N: NCommand> {
+    commands: Vec<N>,
+}
+
+impl<N: NCommand> CommandBuffer<N> {
     pub fn new() -> Self {
         Self { commands: vec![] }
     }
 
-    pub fn push(&mut self, command: NCommand) {
+    pub fn push(&mut self, command: N) {
         self.commands.push(command);
     }
 
-    pub fn iter_command(self) -> IntoIter<NCommand> {
+    pub fn iter_command(self) -> IntoIter<N> {
         self.commands.into_iter()
     }
 }
