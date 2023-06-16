@@ -6,10 +6,12 @@ use crate::texture::Texture;
 use crate::ui::{Label, UI};
 use bytemuck::cast_slice;
 use glam::{Mat4, Vec3A};
+use rayon::prelude::*;
 use std::cell::RefCell;
 use std::iter;
 use std::rc::Rc;
 use std::slice::{Iter, IterMut};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use uuid::Uuid;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -29,12 +31,12 @@ use winit::window::Window;
 // TODO: abstract render work from Model
 
 pub trait Actor {
-    fn id(&self) -> Uuid;
+    fn id(&self) -> &Uuid;
     fn update(&mut self, dt: &Duration, input_state: &InputState) -> CommandBuffer<NCommandUpdate>;
 }
 
 pub trait Model {
-    fn id(&self) -> Uuid;
+    fn id(&self) -> &Uuid;
     fn aabb(&self) -> &Aabb;
     fn position(&self) -> &Vec3A;
     fn setup(&self) -> CommandBuffer<NCommandSetup>;
@@ -42,7 +44,7 @@ pub trait Model {
 }
 
 pub struct ModelState {
-    models: Vec<Box<dyn Model>>,
+    models: Vec<Box<dyn Model + Send + Sync>>,
 }
 
 impl ModelState {
@@ -50,12 +52,16 @@ impl ModelState {
         Self { models: vec![] }
     }
 
-    pub fn push(&mut self, model: Box<dyn Model>) {
+    pub fn push(&mut self, model: Box<dyn Model + Send + Sync>) {
         self.models.push(model);
     }
 
-    pub fn iter_models(&self) -> Iter<'_, Box<dyn Model>> {
+    pub fn iter_models(&self) -> Iter<'_, Box<dyn Model + Send + Sync>> {
         self.models.iter()
+    }
+
+    pub fn models(&self) -> &Vec<Box<dyn Model + Send + Sync>> {
+        &self.models
     }
 
     fn remove(&mut self, idx: usize) {
@@ -64,7 +70,7 @@ impl ModelState {
 }
 
 pub struct ActorState {
-    actors: Vec<Box<dyn Actor>>,
+    actors: Vec<Box<dyn Actor + Send>>,
 }
 
 impl ActorState {
@@ -72,20 +78,24 @@ impl ActorState {
         Self { actors: vec![] }
     }
 
-    pub fn push(&mut self, actor: Box<dyn Actor>) {
+    pub fn push(&mut self, actor: Box<dyn Actor + Send>) {
         self.actors.push(actor);
     }
 
-    pub fn iter_mut_actors(&mut self) -> IterMut<'_, Box<dyn Actor>> {
+    pub fn iter_mut_actors(&mut self) -> IterMut<'_, Box<dyn Actor + Send>> {
         self.actors.iter_mut()
     }
 
-    pub fn iter_actors(&self) -> Iter<'_, Box<dyn Actor>> {
+    pub fn iter_actors(&self) -> Iter<'_, Box<dyn Actor + Send>> {
         self.actors.iter()
     }
 
     pub fn remove(&mut self, idx: usize) {
         self.actors.swap_remove(idx);
+    }
+
+    pub fn mut_actors(&mut self) -> &mut Vec<Box<dyn Actor + Send>> {
+        &mut self.actors
     }
 }
 
@@ -244,11 +254,11 @@ impl App {
         }
     }
 
-    pub fn add_model(&mut self, model: Box<dyn Model>) {
+    pub fn add_model(&mut self, model: Box<dyn Model + Send + Sync>) {
         self.models.push(model);
     }
 
-    pub fn add_actor(&mut self, actor: Box<dyn Actor>) {
+    pub fn add_actor(&mut self, actor: Box<dyn Actor + Send>) {
         self.actors.push(actor);
     }
 
@@ -285,7 +295,7 @@ impl App {
             NCommandUpdate::RemoveModel(id) => {
                 let mut idx = None;
                 for (i, model) in self.models.iter_models().enumerate() {
-                    if model.id() == id {
+                    if model.id() == &id {
                         idx = Some(i);
                         break;
                     }
@@ -297,7 +307,7 @@ impl App {
             NCommandUpdate::RemoveActor(id) => {
                 let mut idx = None;
                 for (i, actor) in self.actors.iter_actors().enumerate() {
-                    if actor.id() == id {
+                    if actor.id() == &id {
                         idx = Some(i);
                         break;
                     }
@@ -318,19 +328,17 @@ impl App {
     }
 
     pub fn update(&mut self, dt: Duration) {
-        let mut buffers = vec![];
-
-        // TODO: this may be parallilazible now
-        for actor in self.actors.iter_mut_actors() {
-            let command_buffer = actor.update(&dt, &self.input_state);
-            buffers.push(command_buffer);
-        }
-
-        for command_buffer in buffers {
-            for command in command_buffer.iter_command() {
-                self.parse_command(command);
-            }
-        }
+        self.actors
+            .mut_actors()
+            .par_iter_mut()
+            .map(|actor| actor.update(&dt, &self.input_state))
+            .collect::<Vec<CommandBuffer<NCommandUpdate>>>()
+            .into_iter()
+            .for_each(|buffer| {
+                for command in buffer.iter_command() {
+                    self.parse_command(command);
+                }
+            });
 
         self.camera_uniform
             .update_view_proj(&self.camera.borrow(), &self.projection);
@@ -392,14 +400,14 @@ impl App {
 
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
-            // TODO: this may be parallilazible now
+            let cam_position = self.camera.borrow().position();
+
             self.models
-                .iter_models()
+                .models()
+                .par_iter()
                 .filter(|model| culling.test_bounding_box(model.aabb()))
                 .filter(|model| {
-                    model
-                        .position()
-                        .distance_squared(self.camera.borrow().position())
+                    model.position().distance_squared(cam_position)
                         < self.projection.z_far().powi(2)
                 })
                 .map(|model| model.render())

@@ -7,8 +7,8 @@ use crate::app::{Actor, Model};
 pub trait NCommand {}
 
 pub enum NCommandUpdate {
-    CreateModel(Box<dyn Model>),
-    CreateActor(Box<dyn Actor>),
+    CreateModel(Box<dyn Model + Send+ Sync>),
+    CreateActor(Box<dyn Actor + Send>),
     RemoveModel(Uuid),
     RemoveActor(Uuid),
     MoveCamera(Vec3A),

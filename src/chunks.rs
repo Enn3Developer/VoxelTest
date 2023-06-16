@@ -118,8 +118,8 @@ impl Chunk {
 }
 
 impl Model for Chunk {
-    fn id(&self) -> Uuid {
-        self.id.clone()
+    fn id(&self) -> &Uuid {
+        &self.id
     }
 
     fn aabb(&self) -> &Aabb {

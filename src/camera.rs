@@ -247,8 +247,8 @@ impl CameraController {
 }
 
 impl Actor for CameraController {
-    fn id(&self) -> Uuid {
-        self.id.clone()
+    fn id(&self) -> &Uuid {
+        &self.id
     }
 
     fn update(&mut self, dt: &Duration, inputs: &InputState) -> CommandBuffer<NCommandUpdate> {
@@ -285,3 +285,5 @@ impl Actor for CameraController {
         buffer
     }
 }
+
+unsafe impl Send for CameraController {}
