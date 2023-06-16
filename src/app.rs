@@ -10,7 +10,7 @@ use std::iter;
 use std::rc::Rc;
 use std::slice::{Iter, IterMut};
 use std::time::Duration;
-use wgpu::util::{BufferInitDescriptor, DeviceExt, StagingBelt};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages, Color, Device,
@@ -18,16 +18,16 @@ use wgpu::{
     RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RequestAdapterOptions, ShaderStages, Surface, SurfaceConfiguration, TextureUsages,
 };
-use wgpu_glyph::ab_glyph::FontArc;
-use wgpu_glyph::{GlyphBrush, GlyphBrushBuilder, Section, Text};
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
 pub trait Actor {
+    fn id(&self) -> usize;
     fn update(&mut self, dt: &Duration, input_state: &InputState, queue: &Queue) -> CommandBuffer;
 }
 pub trait Model {
+    fn id(&self) -> usize;
     fn aabb(&self) -> &Aabb;
     fn position(&self) -> &Vec3A;
     fn render(&self, render_pass: &mut RenderPass, device: &Device);
@@ -49,6 +49,10 @@ impl ModelState {
     pub fn iter_models(&self) -> Iter<'_, Box<dyn Model>> {
         self.models.iter()
     }
+
+    fn remove(&mut self, idx: usize) {
+        self.models.swap_remove(idx);
+    }
 }
 
 pub struct ActorState {
@@ -66,6 +70,14 @@ impl ActorState {
 
     pub fn iter_mut_actors(&mut self) -> IterMut<'_, Box<dyn Actor>> {
         self.actors.iter_mut()
+    }
+
+    pub fn iter_actors(&self) -> Iter<'_, Box<dyn Actor>> {
+        self.actors.iter()
+    }
+
+    pub fn remove(&mut self, idx: usize) {
+        self.actors.swap_remove(idx);
     }
 }
 
@@ -261,11 +273,36 @@ impl App {
             NCommand::CreateActor(actor) => {
                 self.actors.push(actor);
             }
+            NCommand::RemoveModel(id) => {
+                let mut idx = None;
+                for (i, model) in self.models.iter_models().enumerate() {
+                    if model.id() == id {
+                        idx = Some(i);
+                        break;
+                    }
+                }
+                if let Some(i) = idx {
+                    self.models.remove(i);
+                }
+            }
+            NCommand::RemoveActor(id) => {
+                let mut idx = None;
+                for (i, actor) in self.actors.iter_actors().enumerate() {
+                    if actor.id() == id {
+                        idx = Some(i);
+                        break;
+                    }
+                }
+                if let Some(i) = idx {
+                    self.actors.remove(i);
+                }
+            }
         }
     }
 
     pub fn update(&mut self, dt: Duration) {
-        self.camera_controller.update_camera(&mut self.camera, dt, &self.input_state);
+        self.camera_controller
+            .update_camera(&mut self.camera, dt, &self.input_state);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);
         self.queue
