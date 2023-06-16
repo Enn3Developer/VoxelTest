@@ -1,5 +1,7 @@
 use crate::camera::{Camera, CameraUniform, Projection};
-use crate::command_buffer::{CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate};
+use crate::command_buffer::{
+    CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource, NUniform,
+};
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
 use crate::texture::Texture;
@@ -9,9 +11,9 @@ use glam::{Mat4, Vec3A};
 use rayon::prelude::*;
 use std::cell::RefCell;
 use std::iter;
+use std::ops::Deref;
 use std::rc::Rc;
-use std::slice::{Iter, IterMut};
-use std::sync::{Arc, Mutex, RwLock};
+use std::slice::Iter;
 use std::time::Duration;
 use uuid::Uuid;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -20,8 +22,8 @@ use wgpu::{
     BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages, Color,
     CommandEncoderDescriptor, Device, Features, InstanceDescriptor, Limits, LoadOp, Operations,
     PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, ShaderStages,
-    Surface, SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline, RequestAdapterOptions,
+    ShaderStages, Surface, SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
@@ -39,12 +41,67 @@ pub trait Model {
     fn id(&self) -> &Uuid;
     fn aabb(&self) -> &Aabb;
     fn position(&self) -> &Vec3A;
-    fn setup(&self) -> CommandBuffer<NCommandSetup>;
+    fn setup(&self) -> CommandBuffer<NCommandSetup<dyn NUniform>>;
     fn render(&self) -> CommandBuffer<NCommandRender>;
 }
 
+pub struct NBuffer<N: NUniform> {
+    buffer: Buffer,
+    uniform: Rc<RefCell<N>>,
+}
+
+impl<N: NUniform> NBuffer<N> {
+    pub fn new(buffer: Buffer, uniform: Rc<RefCell<N>>) -> Self {
+        Self { buffer, uniform }
+    }
+
+    pub fn buffer(&self) -> &Buffer {
+        &self.buffer
+    }
+}
+
+pub struct NModel {
+    model: Box<dyn Model + Send + Sync>,
+    pipelines: Vec<RenderPipeline>,
+    buffers: Vec<NBuffer<dyn NUniform>>,
+}
+
+impl NModel {
+    pub fn new(model: Box<dyn Model + Send + Sync>) -> Self {
+        Self {
+            model,
+            pipelines: vec![],
+            buffers: vec![],
+        }
+    }
+
+    pub fn add_pipeline(&mut self, pipeline: RenderPipeline) {
+        self.pipelines.push(pipeline);
+    }
+
+    pub fn pipelines(&self) -> &[RenderPipeline] {
+        &self.pipelines
+    }
+
+    pub fn add_buffer(&mut self, buffer: NBuffer<dyn NUniform>) {
+        self.buffers.push(buffer);
+    }
+
+    pub fn buffers(&self) -> &[NBuffer<dyn NUniform>] {
+        &self.buffers
+    }
+}
+
+impl Deref for NModel {
+    type Target = Box<dyn Model + Send + Sync>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.model
+    }
+}
+
 pub struct ModelState {
-    models: Vec<Box<dyn Model + Send + Sync>>,
+    models: Vec<NModel>,
 }
 
 impl ModelState {
@@ -52,15 +109,15 @@ impl ModelState {
         Self { models: vec![] }
     }
 
-    pub fn push(&mut self, model: Box<dyn Model + Send + Sync>) {
+    pub fn push(&mut self, model: NModel) {
         self.models.push(model);
     }
 
-    pub fn iter_models(&self) -> Iter<'_, Box<dyn Model + Send + Sync>> {
+    pub fn iter_models(&self) -> Iter<'_, NModel> {
         self.models.iter()
     }
 
-    pub fn models(&self) -> &Vec<Box<dyn Model + Send + Sync>> {
+    pub fn models(&self) -> &Vec<NModel> {
         &self.models
     }
 
@@ -80,10 +137,6 @@ impl ActorState {
 
     pub fn push(&mut self, actor: Box<dyn Actor + Send>) {
         self.actors.push(actor);
-    }
-
-    pub fn iter_mut_actors(&mut self) -> IterMut<'_, Box<dyn Actor + Send>> {
-        self.actors.iter_mut()
     }
 
     pub fn iter_actors(&self) -> Iter<'_, Box<dyn Actor + Send>> {
@@ -254,7 +307,7 @@ impl App {
         }
     }
 
-    pub fn add_model(&mut self, model: Box<dyn Model + Send + Sync>) {
+    pub fn add_model(&mut self, model: NModel) {
         self.models.push(model);
     }
 
@@ -284,10 +337,17 @@ impl App {
         self.input_state.input(event)
     }
 
-    pub fn parse_command(&mut self, command: NCommandUpdate) {
+    pub fn parse_update_command(&mut self, command: NCommandUpdate) {
         match command {
             NCommandUpdate::CreateModel(model) => {
-                self.models.push(model);
+                let mut n_model = NModel::new(model);
+                let buffer = n_model.setup();
+
+                for command in buffer.iter_command() {
+                    self.parse_setup_command(command, &mut n_model);
+                }
+
+                self.models.push(n_model);
             }
             NCommandUpdate::CreateActor(actor) => {
                 self.actors.push(actor);
@@ -327,6 +387,49 @@ impl App {
         }
     }
 
+    pub fn parse_setup_command<N: NUniform>(
+        &self,
+        command: NCommandSetup<N>,
+        n_model: &mut NModel,
+    ) {
+        match command {
+            NCommandSetup::CreateBuffer(uniform, buffer_usages) => {
+                let buffer = self.device.create_buffer_init(&BufferInitDescriptor {
+                    label: None,
+                    contents: bytemuck::cast_slice(&[uniform.borrow()]),
+                    usage: buffer_usages,
+                });
+                n_model.add_buffer(buffer);
+            }
+            NCommandSetup::CreateBindGroup(layout_entries, resources) => {
+                let layout = self
+                    .device
+                    .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: layout_entries,
+                    });
+
+                let entries = resources.iter().enumerate().map(|(idx, resource)| {
+                    let r = match resource {
+                        NResource::Buffer(i) => n_model.buffers[i].buffer().as_entire_binding(),
+                    };
+                });
+
+                let bind_group = self.device.create_bind_group(&BindGroupDescriptor {
+                    label: None,
+                    layout: &layout,
+                    entries: &[BindGroupEntry {
+                        binding: 0,
+                        resource: self.camera_buffer.as_entire_binding(),
+                    }],
+                });
+            }
+            NCommandSetup::CreatePipeline() => {}
+        }
+    }
+
+    pub fn parse_render_command(&mut self, command: NCommandRender) {}
+
     pub fn update(&mut self, dt: Duration) {
         self.actors
             .mut_actors()
@@ -336,7 +439,7 @@ impl App {
             .into_iter()
             .for_each(|buffer| {
                 for command in buffer.iter_command() {
-                    self.parse_command(command);
+                    self.parse_update_command(command);
                 }
             });
 

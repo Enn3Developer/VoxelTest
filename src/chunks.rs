@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     app::Model,
-    command_buffer::{CommandBuffer, NCommandRender, NCommandSetup},
+    command_buffer::{CommandBuffer, NCommandRender, NCommandSetup, NUniform},
     frustum::Aabb,
 };
 
@@ -130,7 +130,7 @@ impl Model for Chunk {
         &self.position
     }
 
-    fn setup(&self) -> CommandBuffer<NCommandSetup> {
+    fn setup<N: NUniform>(&self) -> CommandBuffer<NCommandSetup<N>> {
         todo!()
     }
 
