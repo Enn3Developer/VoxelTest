@@ -1,12 +1,9 @@
-use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
 use std::{cell::RefCell, rc::Rc, vec::IntoIter};
 use uuid::Uuid;
-use wgpu::{BindGroupLayoutEntry, BufferUsages};
+use wgpu::{BindGroupLayoutEntry, BufferUsages, VertexBufferLayout};
 
 use crate::app::{Actor, Model};
-
-pub trait NUniform: Pod + Zeroable {}
 
 pub trait NCommand {}
 
@@ -26,15 +23,18 @@ pub enum NCommandUpdate {
 
 impl NCommand for NCommandUpdate {}
 
-pub enum NCommandSetup<N: NUniform> {
-    CreateBuffer(Rc<RefCell<N>>, BufferUsages),
+pub enum NCommandSetup {
+    CreateBuffer(Rc<RefCell<[u8]>>, BufferUsages),
     CreateBindGroup(&'static [BindGroupLayoutEntry], Vec<NResource>),
-    CreatePipeline(/*TODO: add the necessary data*/),
+    CreatePipeline(
+        &'static [usize],
+        String,
+        &'static [VertexBufferLayout<'static>],
+    ),
+    SharePipeline(&'static Uuid, usize),
 }
 
-impl<T> NUniform for T where T: Pod + Zeroable {}
-
-impl<N: NUniform> NCommand for NCommandSetup<N> {}
+impl NCommand for NCommandSetup {}
 
 pub enum NCommandRender {
     // TODO: add all the possible commands

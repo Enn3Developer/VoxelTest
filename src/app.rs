@@ -1,7 +1,8 @@
 use crate::camera::{Camera, CameraUniform, Projection};
 use crate::command_buffer::{
-    CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource, NUniform,
+    CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource,
 };
+use crate::create_render_pipeline;
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
 use crate::texture::Texture;
@@ -18,12 +19,13 @@ use std::time::Duration;
 use uuid::Uuid;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages, Color,
-    CommandEncoderDescriptor, Device, Features, InstanceDescriptor, Limits, LoadOp, Operations,
-    PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline, RequestAdapterOptions,
-    ShaderStages, Surface, SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
+    Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType,
+    BufferUsages, Color, CommandEncoderDescriptor, Device, Features, InstanceDescriptor, Limits,
+    LoadOp, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipeline, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    Surface, SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
@@ -41,17 +43,17 @@ pub trait Model {
     fn id(&self) -> &Uuid;
     fn aabb(&self) -> &Aabb;
     fn position(&self) -> &Vec3A;
-    fn setup(&self) -> CommandBuffer<NCommandSetup<dyn NUniform>>;
+    fn setup(&self) -> CommandBuffer<NCommandSetup>;
     fn render(&self) -> CommandBuffer<NCommandRender>;
 }
 
-pub struct NBuffer<N: NUniform> {
+pub struct NBuffer {
     buffer: Buffer,
-    uniform: Rc<RefCell<N>>,
+    uniform: Rc<RefCell<[u8]>>,
 }
 
-impl<N: NUniform> NBuffer<N> {
-    pub fn new(buffer: Buffer, uniform: Rc<RefCell<N>>) -> Self {
+impl NBuffer {
+    pub fn new(buffer: Buffer, uniform: Rc<RefCell<[u8]>>) -> Self {
         Self { buffer, uniform }
     }
 
@@ -60,10 +62,30 @@ impl<N: NUniform> NBuffer<N> {
     }
 }
 
+pub struct NBindGroup {
+    bind_group: BindGroup,
+    layout: BindGroupLayout,
+}
+
+impl NBindGroup {
+    pub fn new(bind_group: BindGroup, layout: BindGroupLayout) -> Self {
+        Self { bind_group, layout }
+    }
+
+    pub fn bind_group(&self) -> &BindGroup {
+        &self.bind_group
+    }
+
+    pub fn layout(&self) -> &BindGroupLayout {
+        &self.layout
+    }
+}
+
 pub struct NModel {
     model: Box<dyn Model + Send + Sync>,
-    pipelines: Vec<RenderPipeline>,
-    buffers: Vec<NBuffer<dyn NUniform>>,
+    pipelines: Vec<Rc<RenderPipeline>>,
+    buffers: Vec<NBuffer>,
+    bind_groups: Vec<NBindGroup>,
 }
 
 impl NModel {
@@ -72,23 +94,36 @@ impl NModel {
             model,
             pipelines: vec![],
             buffers: vec![],
+            bind_groups: vec![],
         }
     }
 
     pub fn add_pipeline(&mut self, pipeline: RenderPipeline) {
+        self.pipelines.push(Rc::new(pipeline));
+    }
+
+    pub fn add_pipeline_rc(&mut self, pipeline: Rc<RenderPipeline>) {
         self.pipelines.push(pipeline);
     }
 
-    pub fn pipelines(&self) -> &[RenderPipeline] {
+    pub fn pipelines(&self) -> &[Rc<RenderPipeline>] {
         &self.pipelines
     }
 
-    pub fn add_buffer(&mut self, buffer: NBuffer<dyn NUniform>) {
+    pub fn add_buffer(&mut self, buffer: NBuffer) {
         self.buffers.push(buffer);
     }
 
-    pub fn buffers(&self) -> &[NBuffer<dyn NUniform>] {
+    pub fn buffers(&self) -> &[NBuffer] {
         &self.buffers
+    }
+
+    pub fn add_bind_group(&mut self, bind_group: NBindGroup) {
+        self.bind_groups.push(bind_group);
+    }
+
+    pub fn bind_groups(&self) -> &[NBindGroup] {
+        &self.bind_groups
     }
 }
 
@@ -100,6 +135,8 @@ impl Deref for NModel {
     }
 }
 
+unsafe impl Sync for NModel {}
+
 pub struct ModelState {
     models: Vec<NModel>,
 }
@@ -107,6 +144,16 @@ pub struct ModelState {
 impl ModelState {
     pub fn new() -> Self {
         Self { models: vec![] }
+    }
+
+    pub fn get_model(&self, id: &Uuid) -> Option<&NModel> {
+        for model in &self.models {
+            if model.id() == id {
+                return Some(model);
+            }
+        }
+
+        None
     }
 
     pub fn push(&mut self, model: NModel) {
@@ -117,7 +164,7 @@ impl ModelState {
         self.models.iter()
     }
 
-    pub fn models(&self) -> &Vec<NModel> {
+    pub fn models(&self) -> &[NModel] {
         &self.models
     }
 
@@ -387,19 +434,16 @@ impl App {
         }
     }
 
-    pub fn parse_setup_command<N: NUniform>(
-        &self,
-        command: NCommandSetup<N>,
-        n_model: &mut NModel,
-    ) {
+    pub fn parse_setup_command(&self, command: NCommandSetup, n_model: &mut NModel) {
         match command {
             NCommandSetup::CreateBuffer(uniform, buffer_usages) => {
                 let buffer = self.device.create_buffer_init(&BufferInitDescriptor {
                     label: None,
-                    contents: bytemuck::cast_slice(&[uniform.borrow()]),
+                    contents: &uniform.borrow(),
                     usage: buffer_usages,
                 });
-                n_model.add_buffer(buffer);
+                let n_buffer = NBuffer::new(buffer, uniform);
+                n_model.add_buffer(n_buffer);
             }
             NCommandSetup::CreateBindGroup(layout_entries, resources) => {
                 let layout = self
@@ -409,22 +453,65 @@ impl App {
                         entries: layout_entries,
                     });
 
-                let entries = resources.iter().enumerate().map(|(idx, resource)| {
-                    let r = match resource {
-                        NResource::Buffer(i) => n_model.buffers[i].buffer().as_entire_binding(),
-                    };
-                });
+                let entries: Vec<BindGroupEntry> = resources
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, resource)| {
+                        let r = match resource {
+                            NResource::Buffer(i) => {
+                                n_model.buffers()[*i].buffer().as_entire_binding()
+                            }
+                        };
+                        BindGroupEntry {
+                            binding: idx as u32,
+                            resource: r,
+                        }
+                    })
+                    .collect();
 
                 let bind_group = self.device.create_bind_group(&BindGroupDescriptor {
                     label: None,
                     layout: &layout,
-                    entries: &[BindGroupEntry {
-                        binding: 0,
-                        resource: self.camera_buffer.as_entire_binding(),
-                    }],
+                    entries: &entries,
                 });
+
+                n_model.add_bind_group(NBindGroup::new(bind_group, layout));
             }
-            NCommandSetup::CreatePipeline() => {}
+            NCommandSetup::CreatePipeline(bind_groups, shader, vertex_layouts) => {
+                let bind_group_layouts: Vec<_> = bind_groups
+                    .iter()
+                    .map(|idx| n_model.bind_groups[*idx].layout())
+                    .collect();
+
+                let pipeline_layout =
+                    self.device
+                        .create_pipeline_layout(&PipelineLayoutDescriptor {
+                            label: None,
+                            bind_group_layouts: &bind_group_layouts,
+                            push_constant_ranges: &[],
+                        });
+                let shader = ShaderModuleDescriptor {
+                    label: None,
+                    source: ShaderSource::Wgsl(shader.into()),
+                };
+
+                let render_pipeline = create_render_pipeline(
+                    &self.device,
+                    &pipeline_layout,
+                    self.config.format,
+                    Some(Texture::DEPTH_FORMAT),
+                    vertex_layouts,
+                    shader,
+                );
+
+                n_model.add_pipeline(render_pipeline);
+            }
+            NCommandSetup::SharePipeline(id, idx) => {
+                if let Some(model) = self.models.get_model(id) {
+                    let pipeline = model.pipelines()[idx].clone();
+                    n_model.add_pipeline_rc(pipeline);
+                }
+            }
         }
     }
 
