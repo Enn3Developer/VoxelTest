@@ -22,7 +22,7 @@ use wgpu::{
     Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType,
     BufferUsages, Color, CommandEncoderDescriptor, Device, Features, InstanceDescriptor, Limits,
-    LoadOp, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue,
+    LoadOp, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RenderPass,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, ShaderStages,
     Surface, SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
@@ -201,7 +201,7 @@ impl ActorState {
 
 pub struct App {
     actors: ActorState,
-    models: ModelState,
+    models: Rc<RefCell<ModelState>>,
     input_state: InputState,
 
     surface: Surface,
@@ -210,14 +210,14 @@ pub struct App {
     config: SurfaceConfiguration,
     size: PhysicalSize<u32>,
     window: Window,
-    depth_texture: Texture,
+    depth_texture: Rc<Texture>,
     ui: UI,
 
     camera: Rc<RefCell<Camera>>,
     projection: Projection,
     camera_uniform: CameraUniform,
     camera_buffer: Buffer,
-    camera_bind_group: BindGroup,
+    camera_bind_group: Rc<BindGroup>,
 
     fps_label: Label,
     calc_fps: u32,
@@ -279,7 +279,11 @@ impl App {
         };
         surface.configure(&device, &config);
 
-        let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+        let depth_texture = Rc::new(Texture::create_depth_texture(
+            &device,
+            &config,
+            "depth_texture",
+        ));
 
         let camera = Rc::new(RefCell::new(Camera::new((0.0, 5.0, 10.0), -1.57, -0.35)));
         let projection = Projection::new(config.width, config.height, 0.78, 0.1, 1000.0);
@@ -308,14 +312,14 @@ impl App {
                 label: Some("camera_bind_group_layout"),
             });
 
-        let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
+        let camera_bind_group = Rc::new(device.create_bind_group(&BindGroupDescriptor {
             layout: &camera_bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("camera_bind_group"),
-        });
+        }));
 
         let ui = UI::new(
             include_bytes!("../fonts/FiraSans-Regular.ttf"),
@@ -330,7 +334,7 @@ impl App {
 
         Self {
             actors: ActorState::new(),
-            models: ModelState::new(),
+            models: Rc::new(RefCell::new(ModelState::new())),
             input_state: InputState::new(),
 
             surface,
@@ -355,7 +359,7 @@ impl App {
     }
 
     pub fn add_model(&mut self, model: NModel) {
-        self.models.push(model);
+        self.models.borrow_mut().push(model);
     }
 
     pub fn add_actor(&mut self, actor: Box<dyn Actor + Send>) {
@@ -375,8 +379,11 @@ impl App {
 
             self.projection.resize(new_size.width, new_size.height);
 
-            self.depth_texture =
-                Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.depth_texture = Rc::new(Texture::create_depth_texture(
+                &self.device,
+                &self.config,
+                "depth_texture",
+            ));
         }
     }
 
@@ -394,21 +401,21 @@ impl App {
                     self.parse_setup_command(command, &mut n_model);
                 }
 
-                self.models.push(n_model);
+                self.models.borrow_mut().push(n_model);
             }
             NCommandUpdate::CreateActor(actor) => {
                 self.actors.push(actor);
             }
             NCommandUpdate::RemoveModel(id) => {
                 let mut idx = None;
-                for (i, model) in self.models.iter_models().enumerate() {
+                for (i, model) in self.models.borrow().iter_models().enumerate() {
                     if model.id() == &id {
                         idx = Some(i);
                         break;
                     }
                 }
                 if let Some(i) = idx {
-                    self.models.remove(i);
+                    self.models.borrow_mut().remove(i);
                 }
             }
             NCommandUpdate::RemoveActor(id) => {
@@ -507,7 +514,7 @@ impl App {
                 n_model.add_pipeline(render_pipeline);
             }
             NCommandSetup::SharePipeline(id, idx) => {
-                if let Some(model) = self.models.get_model(id) {
+                if let Some(model) = self.models.borrow().get_model(id) {
                     let pipeline = model.pipelines()[idx].clone();
                     n_model.add_pipeline_rc(pipeline);
                 }
@@ -515,7 +522,27 @@ impl App {
         }
     }
 
-    pub fn parse_render_command(&mut self, command: NCommandRender) {}
+    pub fn parse_render_command<'b, 'a: 'b>(
+        &mut self,
+        command: NCommandRender,
+        model: &'a NModel,
+        render_pass: &'b mut RenderPass<'a>,
+    ) {
+        match command {
+            NCommandRender::SetVertexBuffer(slot, idx) => {
+                render_pass.set_vertex_buffer(slot, model.buffers[idx].buffer().slice(..));
+            }
+            NCommandRender::SetIndexBuffer(idx, index_format) => {
+                render_pass.set_index_buffer(model.buffers[idx].buffer().slice(..), index_format);
+            }
+            NCommandRender::SetBindGroup(i, idx) => {
+                render_pass.set_bind_group(i, model.bind_groups()[idx].bind_group(), &[]);
+            }
+            NCommandRender::DrawIndexed(indices, instances) => {
+                render_pass.draw_indexed(0..indices, 0, 0..instances);
+            }
+        }
+    }
 
     pub fn update(&mut self, dt: Duration) {
         self.actors
@@ -563,6 +590,10 @@ impl App {
             let culling = FrustumCuller::from_matrix(Mat4::from_cols_array_2d(
                 &self.camera_uniform.view_proj,
             ));
+            let depth = self.depth_texture.clone();
+            let cam_bind_group = self.camera_bind_group.clone();
+            let models = self.models.clone();
+            let models = models.borrow();
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -579,7 +610,7 @@ impl App {
                     },
                 })],
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
+                    view: &depth.view,
                     depth_ops: Some(Operations {
                         load: LoadOp::Clear(1.0),
                         store: true,
@@ -588,11 +619,11 @@ impl App {
                 }),
             });
 
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(0, &cam_bind_group, &[]);
 
             let cam_position = self.camera.borrow().position();
 
-            self.models
+            models
                 .models()
                 .par_iter()
                 .filter(|model| culling.test_bounding_box(model.aabb()))
@@ -600,8 +631,14 @@ impl App {
                     model.position().distance_squared(cam_position)
                         < self.projection.z_far().powi(2)
                 })
-                .map(|model| model.render())
-                .for_each(|_command_buffer| {});
+                .map(|model| (model, model.render()))
+                .collect::<Vec<(&NModel, CommandBuffer<NCommandRender>)>>()
+                .into_iter()
+                .for_each(|(model, command_buffer)| {
+                    for command in command_buffer.iter_command() {
+                        self.parse_render_command(command, model, &mut render_pass);
+                    }
+                });
         }
 
         self.ui.render(&self.fps_label);

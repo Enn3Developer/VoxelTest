@@ -1,7 +1,7 @@
 use glam::Vec3A;
 use std::{cell::RefCell, rc::Rc, vec::IntoIter};
 use uuid::Uuid;
-use wgpu::{BindGroupLayoutEntry, BufferUsages, VertexBufferLayout};
+use wgpu::{BindGroupLayoutEntry, BufferUsages, IndexFormat, VertexBufferLayout};
 
 use crate::app::{Actor, Model};
 
@@ -37,7 +37,10 @@ pub enum NCommandSetup {
 impl NCommand for NCommandSetup {}
 
 pub enum NCommandRender {
-    // TODO: add all the possible commands
+    SetVertexBuffer(u32, usize),
+    SetIndexBuffer(usize, IndexFormat),
+    SetBindGroup(u32, usize),
+    DrawIndexed(u32, u32),
 }
 
 impl NCommand for NCommandRender {}

@@ -1,15 +1,15 @@
 use anyhow::Result;
 use image::{DynamicImage, GenericImageView};
 use wgpu::{
-    AddressMode, CompareFunction, Device, Extent3d, FilterMode, Queue, SamplerDescriptor,
+    AddressMode, CompareFunction, Device, Extent3d, FilterMode, Queue, Sampler, SamplerDescriptor,
     SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    TextureView, TextureViewDescriptor,
 };
 
 pub struct Texture {
     pub texture: wgpu::Texture,
-    pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
+    pub view: TextureView,
+    pub sampler: Sampler,
 }
 
 impl Texture {
