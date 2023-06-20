@@ -37,10 +37,12 @@ pub enum NCommandSetup {
 impl NCommand for NCommandSetup {}
 
 pub enum NCommandRender {
+    SetPipeline(usize),
     SetVertexBuffer(u32, usize),
     SetIndexBuffer(usize, IndexFormat),
     SetBindGroup(u32, usize),
     DrawIndexed(u32, u32),
+    DrawModelIndexed(usize, u32, &'static [usize])
 }
 
 impl NCommand for NCommandRender {}

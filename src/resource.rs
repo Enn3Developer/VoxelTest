@@ -3,54 +3,54 @@ use crate::model::{Material, Mesh, Model, ModelVertex};
 use crate::texture::Texture;
 use anyhow::Result;
 use std::io::{BufReader, Cursor};
+use std::path::Path;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BindGroupLayout, BufferUsages, Device, Queue};
 
-pub async fn load_string(file_name: &str) -> Result<String> {
-    let res = Res::get(&format!("res/{file_name}")).unwrap();
+pub fn load_string<P: AsRef<Path>>(file_name: P) -> Result<String> {
+    let res = Res::get(&format!("res/{}", file_name.as_ref().to_string_lossy())).unwrap();
     let txt = String::from_utf8(res.data.into())?;
 
     Ok(txt)
 }
 
-pub async fn load_binary(file_name: &str) -> Result<Vec<u8>> {
+pub fn load_binary(file_name: &str) -> Result<Vec<u8>> {
     let res = Res::get(&format!("res/{file_name}")).unwrap();
     let data = res.data.into();
 
     Ok(data)
 }
 
-pub async fn load_texture(
+pub fn load_texture(
     file_name: &str,
     device: &Device,
     queue: &Queue,
     is_normal_map: bool,
 ) -> Result<Texture> {
-    let data = load_binary(file_name).await?;
+    let data = load_binary(file_name)?;
     Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
 }
 
-pub async fn load_model(
+pub fn load_model(
     file_name: &str,
     device: &Device,
     queue: &Queue,
     layout: &BindGroupLayout,
 ) -> Result<Model> {
-    let obj_text = load_string(file_name).await?;
+    let obj_text = load_string(file_name)?;
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
 
     let (models, obj_materials) =
-        tobj::load_obj_buf_async(&mut obj_reader, &tobj::GPU_LOAD_OPTIONS, |p| async move {
-            let mat_text = load_string(&p).await.unwrap();
+        tobj::load_obj_buf(&mut obj_reader, &tobj::GPU_LOAD_OPTIONS, |p| {
+            let mat_text = load_string(p).unwrap();
             tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
-        })
-        .await?;
+        })?;
 
     let mut materials = vec![];
     for m in obj_materials? {
         let diffuse_texture =
-            load_texture(&m.diffuse_texture.unwrap(), device, queue, false).await?;
+            load_texture(&m.diffuse_texture.unwrap(), device, queue, false)?;
 
         materials.push(Material::new(device, &m.name, diffuse_texture, layout));
     }

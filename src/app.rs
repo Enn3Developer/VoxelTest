@@ -5,6 +5,8 @@ use crate::command_buffer::{
 use crate::create_render_pipeline;
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
+use crate::model::DrawModel;
+use crate::resource::load_model;
 use crate::texture::Texture;
 use crate::ui::{Label, UI};
 use bytemuck::cast_slice;
@@ -24,8 +26,9 @@ use wgpu::{
     BufferUsages, Color, CommandEncoderDescriptor, Device, Features, InstanceDescriptor, Limits,
     LoadOp, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RenderPass,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RenderPipeline, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, ShaderStages,
-    Surface, SurfaceConfiguration, TextureUsages, TextureViewDescriptor,
+    RenderPipeline, RequestAdapterOptions, SamplerBindingType, ShaderModuleDescriptor,
+    ShaderSource, ShaderStages, Surface, SurfaceConfiguration, TextureSampleType, TextureUsages,
+    TextureViewDescriptor, TextureViewDimension,
 };
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
@@ -219,6 +222,9 @@ pub struct App {
     camera_buffer: Buffer,
     camera_bind_group: Rc<BindGroup>,
 
+    model_layout: BindGroupLayout,
+    obj_models: Vec<crate::model::Model>,
+
     fps_label: Label,
     calc_fps: u32,
     last_time: f32,
@@ -332,6 +338,28 @@ impl App {
             .with_bounds((config.width as f32, config.height as f32))
             .with_text("0 fps");
 
+        let model_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: TextureViewDimension::D2,
+                        sample_type: TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+            label: Some("texture_bind_group_layout"),
+        });
+
         Self {
             actors: ActorState::new(),
             models: Rc::new(RefCell::new(ModelState::new())),
@@ -351,6 +379,9 @@ impl App {
             camera_buffer,
             camera_bind_group,
             camera_uniform,
+
+            model_layout,
+            obj_models: vec![],
 
             fps_label,
             calc_fps: 0,
@@ -529,6 +560,9 @@ impl App {
         render_pass: &'b mut RenderPass<'a>,
     ) {
         match command {
+            NCommandRender::SetPipeline(idx) => {
+                render_pass.set_pipeline(&model.pipelines()[idx]);
+            }
             NCommandRender::SetVertexBuffer(slot, idx) => {
                 render_pass.set_vertex_buffer(slot, model.buffers[idx].buffer().slice(..));
             }
@@ -540,6 +574,19 @@ impl App {
             }
             NCommandRender::DrawIndexed(indices, instances) => {
                 render_pass.draw_indexed(0..indices, 0, 0..instances);
+            }
+            NCommandRender::DrawModelIndexed(idx, instances, bind_groups_idx) => {
+                let bind_groups: Vec<&BindGroup> = bind_groups_idx
+                    .iter()
+                    .map(|i| model.bind_groups()[*i].bind_group())
+                    .collect();
+                render_pass.draw_model_instanced(
+                    &self.obj_models[idx],
+                    0..instances,
+                    &self.camera_bind_group,
+                    None,
+                    &bind_groups,
+                );
             }
         }
     }
