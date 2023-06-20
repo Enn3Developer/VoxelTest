@@ -1,5 +1,5 @@
 use crate::assets::Res;
-use crate::model::{Material, Mesh, Model, ModelVertex};
+use crate::model::{Material, Mesh, ObjModel, ModelVertex};
 use crate::texture::Texture;
 use anyhow::Result;
 use std::io::{BufReader, Cursor};
@@ -36,7 +36,7 @@ pub fn load_model(
     device: &Device,
     queue: &Queue,
     layout: &BindGroupLayout,
-) -> Result<Model> {
+) -> Result<ObjModel> {
     let obj_text = load_string(file_name)?;
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
@@ -90,5 +90,5 @@ pub fn load_model(
         })
         .collect();
 
-    Ok(Model { meshes, materials })
+    Ok(ObjModel { meshes, materials })
 }

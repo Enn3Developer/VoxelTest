@@ -39,7 +39,7 @@ impl Vertex for ModelVertex {
     }
 }
 
-pub struct Model {
+pub struct ObjModel {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
 }
@@ -89,13 +89,6 @@ pub struct Mesh {
 }
 
 pub trait DrawModel<'a> {
-    fn draw_mesh(
-        &mut self,
-        mesh: &'a Mesh,
-        material: &'a Material,
-        camera_bind_group: &'a BindGroup,
-        light_bind_group: &'a BindGroup,
-    );
     fn draw_mesh_instanced(
         &mut self,
         mesh: &'a Mesh,
@@ -105,15 +98,9 @@ pub trait DrawModel<'a> {
         light_bind_group: Option<&'a BindGroup>,
         optional_bind_group: &[&'a BindGroup],
     );
-    fn draw_model(
-        &mut self,
-        model: &'a Model,
-        camera_bind_group: &'a BindGroup,
-        light_bind_group: &'a BindGroup,
-    );
     fn draw_model_instanced(
         &mut self,
-        model: &'a Model,
+        model: &'a ObjModel,
         instances: Range<u32>,
         camera_bind_group: &'a BindGroup,
         light_bind_group: Option<&'a BindGroup>,
@@ -138,13 +125,13 @@ pub trait DrawLight<'a> {
 
     fn draw_light_model(
         &mut self,
-        model: &'a Model,
+        model: &'a ObjModel,
         camera_bind_group: &'a BindGroup,
         light_bind_group: &'a BindGroup,
     );
     fn draw_light_model_instanced(
         &mut self,
-        model: &'a Model,
+        model: &'a ObjModel,
         instances: Range<u32>,
         camera_bind_group: &'a BindGroup,
         light_bind_group: &'a BindGroup,
@@ -155,23 +142,6 @@ impl<'a, 'b> DrawModel<'b> for RenderPass<'a>
 where
     'b: 'a,
 {
-    fn draw_mesh(
-        &mut self,
-        mesh: &'b Mesh,
-        material: &'b Material,
-        camera_bind_group: &'b BindGroup,
-        light_bind_group: &'a BindGroup,
-    ) {
-        self.draw_mesh_instanced(
-            mesh,
-            material,
-            0..1,
-            camera_bind_group,
-            Some(light_bind_group),
-            &[],
-        );
-    }
-
     fn draw_mesh_instanced(
         &mut self,
         mesh: &'b Mesh,
@@ -197,18 +167,9 @@ where
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 
-    fn draw_model(
-        &mut self,
-        model: &'b Model,
-        camera_bind_group: &'b BindGroup,
-        light_bind_group: &'a BindGroup,
-    ) {
-        self.draw_model_instanced(model, 0..1, camera_bind_group, Some(light_bind_group), &[]);
-    }
-
     fn draw_model_instanced(
         &mut self,
-        model: &'b Model,
+        model: &'b ObjModel,
         instances: Range<u32>,
         camera_bind_group: &'b BindGroup,
         light_bind_group: Option<&'a BindGroup>,
@@ -257,7 +218,7 @@ where
 
     fn draw_light_model(
         &mut self,
-        model: &'b Model,
+        model: &'b ObjModel,
         camera_bind_group: &'b BindGroup,
         light_bind_group: &'b BindGroup,
     ) {
@@ -265,7 +226,7 @@ where
     }
     fn draw_light_model_instanced(
         &mut self,
-        model: &'b Model,
+        model: &'b ObjModel,
         instances: Range<u32>,
         camera_bind_group: &'b BindGroup,
         light_bind_group: &'b BindGroup,

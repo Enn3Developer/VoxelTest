@@ -5,44 +5,46 @@ use wgpu::{BindGroupLayoutEntry, BufferUsages, IndexFormat, VertexBufferLayout};
 
 use crate::app::{Actor, Model};
 
+pub type Index = usize;
+pub type ID = Uuid;
+pub type NModel = Box<dyn Model + Send + Sync>;
+pub type NActor = Box<dyn Actor + Send>;
+
 pub trait NCommand {}
 
 pub enum NResource {
-    Buffer(usize),
+    Buffer(Index),
 }
 
 pub enum NCommandUpdate {
-    CreateModel(Box<dyn Model + Send + Sync>),
-    CreateActor(Box<dyn Actor + Send>),
-    RemoveModel(Uuid),
-    RemoveActor(Uuid),
+    CreateModel(NModel),
+    CreateActor(NActor),
+    RemoveModel(ID),
+    RemoveActor(ID),
     MoveCamera(Vec3A),
     RotateCamera(f32, f32),
     FovCamera(f32),
+    UpdateBuffer(ID, Index),
 }
 
 impl NCommand for NCommandUpdate {}
 
 pub enum NCommandSetup {
-    CreateBuffer(Rc<RefCell<[u8]>>, BufferUsages),
-    CreateBindGroup(&'static [BindGroupLayoutEntry], Vec<NResource>),
-    CreatePipeline(
-        &'static [usize],
-        String,
-        &'static [VertexBufferLayout<'static>],
-    ),
-    SharePipeline(&'static Uuid, usize),
+    CreateBuffer(Rc<RefCell<Vec<u8>>>, BufferUsages),
+    CreateBindGroup(Vec<BindGroupLayoutEntry>, Vec<NResource>),
+    CreatePipeline(Vec<Index>, &'static str, Vec<VertexBufferLayout<'static>>, bool),
+    SharePipeline(&'static ID, Index),
 }
 
 impl NCommand for NCommandSetup {}
 
 pub enum NCommandRender {
-    SetPipeline(usize),
-    SetVertexBuffer(u32, usize),
-    SetIndexBuffer(usize, IndexFormat),
-    SetBindGroup(u32, usize),
+    SetPipeline(Index),
+    SetVertexBuffer(u32, Index),
+    SetIndexBuffer(Index, IndexFormat),
+    SetBindGroup(u32, Index),
     DrawIndexed(u32, u32),
-    DrawModelIndexed(usize, u32, &'static [usize])
+    DrawModelIndexed(Index, u32, &'static [Index]),
 }
 
 impl NCommand for NCommandRender {}

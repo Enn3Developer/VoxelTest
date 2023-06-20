@@ -1,11 +1,12 @@
 use crate::camera::{Camera, CameraUniform, Projection};
+use crate::chunks::NVec;
 use crate::command_buffer::{
     CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource,
 };
 use crate::create_render_pipeline;
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
-use crate::model::DrawModel;
+use crate::model::{DrawModel, ModelVertex, Vertex};
 use crate::resource::load_model;
 use crate::texture::Texture;
 use crate::ui::{Label, UI};
@@ -34,9 +35,6 @@ use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::window::Window;
 
-// TODO: implement buffers for everything (update, setup render, render)
-// TODO: abstract render work from Model
-
 pub trait Actor {
     fn id(&self) -> &Uuid;
     fn update(&mut self, dt: &Duration, input_state: &InputState) -> CommandBuffer<NCommandUpdate>;
@@ -45,23 +43,27 @@ pub trait Actor {
 pub trait Model {
     fn id(&self) -> &Uuid;
     fn aabb(&self) -> &Aabb;
-    fn position(&self) -> &Vec3A;
+    fn position(&self) -> &NVec;
     fn setup(&self) -> CommandBuffer<NCommandSetup>;
     fn render(&self) -> CommandBuffer<NCommandRender>;
 }
 
 pub struct NBuffer {
     buffer: Buffer,
-    uniform: Rc<RefCell<[u8]>>,
+    uniform: Rc<RefCell<Vec<u8>>>,
 }
 
 impl NBuffer {
-    pub fn new(buffer: Buffer, uniform: Rc<RefCell<[u8]>>) -> Self {
+    pub fn new(buffer: Buffer, uniform: Rc<RefCell<Vec<u8>>>) -> Self {
         Self { buffer, uniform }
     }
 
     pub fn buffer(&self) -> &Buffer {
         &self.buffer
+    }
+
+    pub fn update(&self, queue: &Queue) {
+        queue.write_buffer(&self.buffer, 0, &self.uniform.borrow());
     }
 }
 
@@ -127,6 +129,10 @@ impl NModel {
 
     pub fn bind_groups(&self) -> &[NBindGroup] {
         &self.bind_groups
+    }
+
+    pub fn update_buffer(&self, queue: &Queue, idx: usize) {
+        self.buffers[idx].update(queue);
     }
 }
 
@@ -220,10 +226,11 @@ pub struct App {
     projection: Projection,
     camera_uniform: CameraUniform,
     camera_buffer: Buffer,
+    camera_bind_group_layout: BindGroupLayout,
     camera_bind_group: Rc<BindGroup>,
 
     model_layout: BindGroupLayout,
-    obj_models: Vec<crate::model::Model>,
+    obj_models: Vec<crate::model::ObjModel>,
 
     fps_label: Label,
     calc_fps: u32,
@@ -377,6 +384,7 @@ impl App {
             camera,
             projection,
             camera_buffer,
+            camera_bind_group_layout,
             camera_bind_group,
             camera_uniform,
 
@@ -395,6 +403,11 @@ impl App {
 
     pub fn add_actor(&mut self, actor: Box<dyn Actor + Send>) {
         self.actors.push(actor);
+    }
+
+    pub fn register_model(&mut self, name: &str) {
+        self.obj_models
+            .push(load_model(name, &self.device, &self.queue, &self.model_layout).unwrap());
     }
 
     pub fn camera(&self) -> Rc<RefCell<Camera>> {
@@ -469,6 +482,13 @@ impl App {
                 self.camera.borrow_mut().add_pitch(pitch);
             }
             NCommandUpdate::FovCamera(_fov) => {}
+            NCommandUpdate::UpdateBuffer(id, idx) => {
+                self.models
+                    .borrow_mut()
+                    .get_model(&id)
+                    .unwrap()
+                    .update_buffer(&self.queue, idx);
+            }
         }
     }
 
@@ -488,7 +508,7 @@ impl App {
                     .device
                     .create_bind_group_layout(&BindGroupLayoutDescriptor {
                         label: None,
-                        entries: layout_entries,
+                        entries: &layout_entries,
                     });
 
                 let entries: Vec<BindGroupEntry> = resources
@@ -515,7 +535,12 @@ impl App {
 
                 n_model.add_bind_group(NBindGroup::new(bind_group, layout));
             }
-            NCommandSetup::CreatePipeline(bind_groups, shader, vertex_layouts) => {
+            NCommandSetup::CreatePipeline(bind_groups, shader, mut vertex_layouts, use_model) => {
+                let mut bind_group_layouts = vec![&self.camera_bind_group_layout];
+                if use_model {
+                    bind_group_layouts.push(&self.model_layout);
+                    vertex_layouts.insert(0, ModelVertex::desc());
+                }
                 let bind_group_layouts: Vec<_> = bind_groups
                     .iter()
                     .map(|idx| n_model.bind_groups[*idx].layout())
@@ -538,7 +563,7 @@ impl App {
                     &pipeline_layout,
                     self.config.format,
                     Some(Texture::DEPTH_FORMAT),
-                    vertex_layouts,
+                    &vertex_layouts,
                     shader,
                 );
 
@@ -554,7 +579,7 @@ impl App {
     }
 
     pub fn parse_render_command<'b, 'a: 'b>(
-        &mut self,
+        &'a self,
         command: NCommandRender,
         model: &'a NModel,
         render_pass: &'b mut RenderPass<'a>,
@@ -675,7 +700,7 @@ impl App {
                 .par_iter()
                 .filter(|model| culling.test_bounding_box(model.aabb()))
                 .filter(|model| {
-                    model.position().distance_squared(cam_position)
+                    Into::<Vec3A>::into(model.position()).distance_squared(cam_position)
                         < self.projection.z_far().powi(2)
                 })
                 .map(|model| (model, model.render()))

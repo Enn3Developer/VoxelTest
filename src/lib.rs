@@ -97,19 +97,12 @@ pub async fn run() {
     let mut app = App::new(window).await;
     let camera_controller = Box::new(CameraController::new(4.0, 1.0, app.camera()));
     app.add_actor(camera_controller);
+    app.register_model("cube.obj");
     let mut last_render_time = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
-            Event::DeviceEvent {
-                event: DeviceEvent::MouseMotion { delta },
-                ..
-            } => {
-                // if state.mouse_pressed {
-                //     state.camera_controller.process_mouse(delta.0, delta.1)
-                // }
-            }
             Event::WindowEvent {
                 ref event,
                 window_id,
