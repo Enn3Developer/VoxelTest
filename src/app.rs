@@ -397,7 +397,12 @@ impl App {
         }
     }
 
-    pub fn add_model(&mut self, model: NModel) {
+    pub fn add_model(&mut self, mut model: NModel) {
+        let buffer = model.setup();
+
+        for command in buffer.iter_command() {
+            self.parse_setup_command(command, &mut model);
+        }
         self.models.borrow_mut().push(model);
     }
 
@@ -541,10 +546,12 @@ impl App {
                     bind_group_layouts.push(&self.model_layout);
                     vertex_layouts.insert(0, ModelVertex::desc());
                 }
-                let bind_group_layouts: Vec<_> = bind_groups
-                    .iter()
-                    .map(|idx| n_model.bind_groups[*idx].layout())
-                    .collect();
+                bind_group_layouts.append(
+                    &mut bind_groups
+                        .iter()
+                        .map(|idx| n_model.bind_groups[*idx].layout())
+                        .collect::<Vec<_>>(),
+                );
 
                 let pipeline_layout =
                     self.device

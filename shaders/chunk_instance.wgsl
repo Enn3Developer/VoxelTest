@@ -21,6 +21,10 @@ struct CameraUniform {
     ambient_strength: f32,
 }
 
+struct ChunkPos {
+    chunk_pos: vec3<f32>
+}
+
 @group(0)@binding(0)
 var<uniform> camera: CameraUniform;
 
@@ -30,7 +34,7 @@ var t_diffuse: texture_2d<f32>;
 var s_diffuse: sampler;
 
 @group(2)@binding(0)
-var chunk_pos: vec3<f32>;
+var<uniform> chunk_pos: ChunkPos;
 
 @vertex
 fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
@@ -43,9 +47,12 @@ fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
 
     let scale = 0.5;
 
-    let position = vec3<f32>(model.position >> 6, (model.position >> 3) & 0b111, model.position & 0b111);
+    let x = f32(model.position >> 6u);
+    let y = f32((model.position >> 3u) & 7u);
+    let z = f32(model.position & 7u);
+    let position = vec3<f32>(x, y, z);
 
-    let world_position = model_matrix * vec4<f32>((position + chunk_pos) * scale, 1.0);
+    let world_position = model_matrix * vec4<f32>((position + chunk_pos.chunk_pos) * scale, 1.0);
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * world_position;

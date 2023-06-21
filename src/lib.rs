@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
 
 use crate::app::App;
+use app::NModel;
 use camera::CameraController;
+use chunks::{Chunk, NVec};
 use std::time::Instant;
+use uuid::Uuid;
 use wgpu::{
     BlendComponent, BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
     DepthStencilState, Device, Face, FragmentState, FrontFace, MultisampleState, PipelineLayout,
@@ -98,6 +101,13 @@ pub async fn run() {
     let camera_controller = Box::new(CameraController::new(4.0, 1.0, app.camera()));
     app.add_actor(camera_controller);
     app.register_model("cube.obj");
+    let mut chunk = Chunk::new(Uuid::new_v4(), NVec::new(0, 0, 0));
+    for x in 0..8 {
+        for z in 0..8 {
+            chunk.add_block_data(NVec::new(x, 0, z), 0);
+        }
+    }
+    app.add_model(NModel::new(Box::new(chunk)));
     let mut last_render_time = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {

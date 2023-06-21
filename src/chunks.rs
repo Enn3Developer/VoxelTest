@@ -51,8 +51,8 @@ impl Block {
         Self { data }
     }
 
-    pub fn with_position<V: Into<UVec3>>(mut self, position: V) -> Self {
-        let position: UVec3 = position.into();
+    pub fn with_position<V: Into<NVec>>(mut self, position: V) -> Self {
+        let position: NVec = position.into();
         let pos = position.x << 6 | position.y << 3 | position.z;
         let data = self.data >> 9;
         self.data = data << 9 | pos;
@@ -104,9 +104,9 @@ impl Default for Block {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable, PartialEq)]
 pub struct NVec {
-    x: u32,
-    y: u32,
-    z: u32,
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
     _padding: u32,
 }
 
@@ -186,7 +186,7 @@ impl Chunk {
         self.blocks.push(block);
     }
 
-    pub fn add_block_data<V: Into<UVec3>>(&mut self, position: V, id: u16) {
+    pub fn add_block_data<V: Into<NVec>>(&mut self, position: V, id: u16) {
         self.blocks
             .push(Block::default().with_position(position).with_id(id));
     }
@@ -264,6 +264,19 @@ impl Model for Chunk {
     }
 
     fn render(&self) -> CommandBuffer<NCommandRender> {
-        todo!()
+        let mut buffer = CommandBuffer::new();
+
+        buffer.push(NCommandRender::SetPipeline(0));
+        buffer.push(NCommandRender::SetVertexBuffer(0, 0));
+        buffer.push(NCommandRender::DrawModelIndexed(
+            0,
+            self.blocks.len() as u32,
+            &[1],
+        ));
+
+        buffer
     }
 }
+
+unsafe impl Send for Chunk {}
+unsafe impl Sync for Chunk {}
