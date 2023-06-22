@@ -1,5 +1,4 @@
 use crate::camera::{Camera, CameraUniform, Projection};
-use crate::chunks::NVec;
 use crate::command_buffer::{
     CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource,
 };
@@ -43,7 +42,7 @@ pub trait Actor {
 pub trait Model {
     fn id(&self) -> &Uuid;
     fn aabb(&self) -> &Aabb;
-    fn position(&self) -> &NVec;
+    fn position(&self) -> &Vec3A;
     fn setup(&self) -> CommandBuffer<NCommandSetup>;
     fn render(&self) -> CommandBuffer<NCommandRender>;
 }
@@ -707,7 +706,7 @@ impl App {
                 .par_iter()
                 .filter(|model| culling.test_bounding_box(model.aabb()))
                 .filter(|model| {
-                    Into::<Vec3A>::into(model.position()).distance_squared(cam_position)
+                    model.position().distance_squared(cam_position)
                         < self.projection.z_far().powi(2)
                 })
                 .map(|model| (model, model.render()))

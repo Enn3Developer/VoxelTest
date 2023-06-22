@@ -3,7 +3,8 @@
 use crate::app::App;
 use app::NModel;
 use camera::CameraController;
-use chunks::{Chunk, NVec};
+use chunks::Chunk;
+use glam::{UVec3, Vec3A};
 use std::time::Instant;
 use uuid::Uuid;
 use wgpu::{
@@ -101,10 +102,10 @@ pub async fn run() {
     let camera_controller = Box::new(CameraController::new(4.0, 1.0, app.camera()));
     app.add_actor(camera_controller);
     app.register_model("cube.obj");
-    let mut chunk = Chunk::new(Uuid::new_v4(), NVec::new(0, 0, 0));
+    let mut chunk = Chunk::new(Uuid::new_v4(), Vec3A::new(0., 0., 0.));
     for x in 0..8 {
         for z in 0..8 {
-            chunk.add_block_data(NVec::new(x, 0, z), 0);
+            chunk.add_block_data(UVec3::new(x, 0, z), 0);
         }
     }
     app.add_model(NModel::new(Box::new(chunk)));

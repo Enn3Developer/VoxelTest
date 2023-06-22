@@ -1,5 +1,5 @@
 struct VertexInput {
-    @location(0) position: u32,
+    @location(0) position: vec3<f32>,
     @location(1) tex_coords: vec2<f32>,
 }
 
@@ -33,9 +33,6 @@ var t_diffuse: texture_2d<f32>;
 @group(1)@binding(1)
 var s_diffuse: sampler;
 
-@group(2)@binding(0)
-var<uniform> chunk_pos: ChunkPos;
-
 @vertex
 fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
     let model_matrix = mat4x4<f32>(
@@ -45,14 +42,7 @@ fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
         instance.model_matrix_3,
     );
 
-    let scale = 0.5;
-
-    let x = f32(model.position >> 6u);
-    let y = f32((model.position >> 3u) & 7u);
-    let z = f32(model.position & 7u);
-    let position = vec3<f32>(x, y, z);
-
-    let world_position = model_matrix * vec4<f32>((position + chunk_pos.chunk_pos) * scale, 1.0);
+    let world_position = model_matrix * vec4<f32>(model.position, 1.0);
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * world_position;

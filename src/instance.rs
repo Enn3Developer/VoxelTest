@@ -1,4 +1,4 @@
-use crate::frustum::Aabb;
+use crate::{frustum::Aabb, model::Vertex};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3A};
 use std::mem::size_of;
@@ -9,23 +9,17 @@ pub const NUM_INSTANCES_PER_ROW: u32 = 256;
 
 pub struct Instance {
     pub position: Vec3A,
-    aabb: Aabb,
 }
 
 impl Instance {
     pub fn new<V: Into<Vec3A>>(position: V) -> Self {
         let position = position.into();
-        let aabb = Aabb::from_params((position - 0.5).into(), (position + 0.5).into());
-        Self { position, aabb }
+        Self { position }
     }
 
     pub fn to_raw(&self) -> InstanceRaw {
         let model = Mat4::from_translation(self.position.into());
         InstanceRaw::new(model)
-    }
-
-    pub fn aabb(&self) -> &Aabb {
-        &self.aabb
     }
 }
 
@@ -41,8 +35,10 @@ impl InstanceRaw {
             model: model.to_cols_array_2d(),
         }
     }
+}
 
-    pub fn desc() -> VertexBufferLayout<'static> {
+impl Vertex for InstanceRaw {
+    fn desc() -> VertexBufferLayout<'static> {
         VertexBufferLayout {
             array_stride: size_of::<InstanceRaw>() as BufferAddress,
             step_mode: VertexStepMode::Instance,
