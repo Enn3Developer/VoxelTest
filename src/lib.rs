@@ -104,8 +104,8 @@ pub async fn run() {
     app.register_model("cube.obj");
     let radius = 32;
     let half_radius = radius / 2;
-    for chunk_x in -half_radius..half_radius {
-        for chunk_z in -half_radius..half_radius {
+    for chunk_x in -half_radius..=half_radius {
+        for chunk_z in -half_radius..=half_radius {
             let mut chunk = Chunk::new(
                 Uuid::new_v4(),
                 Vec3A::new(chunk_x as f32, 0., chunk_z as f32),
