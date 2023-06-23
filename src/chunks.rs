@@ -50,44 +50,44 @@ impl Block {
 
     pub fn with_position<V: Into<UVec3>>(mut self, position: V) -> Self {
         let position: UVec3 = position.into();
-        let pos = position.x << 6 | position.y << 3 | position.z;
-        let data = self.data >> 9;
-        self.data = data << 9 | pos;
+        let pos = position.x << 8 | position.y << 4 | position.z;
+        let data = self.data >> 12;
+        self.data = data << 12 | pos;
 
         self
     }
 
     pub fn with_id(mut self, id: u16) -> Self {
-        let position = self.data & 0b111111111;
-        let data = self.data >> 25;
-        self.data = data << 25 | (id as u32) << 9 | position;
+        let position = self.data & 0b111111111111;
+        let data = self.data >> 28;
+        self.data = data << 28 | (id as u32) << 12 | position;
 
         self
     }
 
     pub fn x(&self) -> u32 {
-        (self.data & 0b111000000) >> 6
+        (self.data & 0b111100000000) >> 8
     }
 
     pub fn y(&self) -> u32 {
-        (self.data & 0b111000) >> 3
+        (self.data & 0b11110000) >> 4
     }
 
     pub fn z(&self) -> u32 {
-        self.data & 0b111
+        self.data & 0b1111
     }
 
     pub fn position(&self) -> UVec3 {
-        let position = self.data & 0b111111111;
+        let position = self.data & 0b111111111111;
         UVec3 {
-            x: position >> 6,
-            y: (position >> 3) & 0b111,
-            z: position & 0b111,
+            x: position >> 8,
+            y: (position >> 4) & 0b1111,
+            z: position & 0b1111,
         }
     }
 
     pub fn id(&self) -> u16 {
-        ((self.data >> 9) & 0xffff) as u16
+        ((self.data >> 12) & 0xffff) as u16
     }
 }
 
@@ -108,10 +108,14 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn new(id: Uuid, position: Vec3A) -> Self {
+        let aabb_pos = position * Vec3A::new(16.0, 16.0, 16.0);
         Self {
             id,
             position,
-            aabb: Aabb::from_params(position.into(), (Into::<Vec3>::into(position) + 8.0).into()),
+            aabb: Aabb::from_params(
+                aabb_pos.into(),
+                (Into::<Vec3>::into(aabb_pos) + 16.0).into(),
+            ),
             blocks: vec![],
             instances: vec![],
             block_data: Rc::new(RefCell::new(vec![])),
@@ -133,7 +137,8 @@ impl Chunk {
         self.blocks.push(block);
         let block_pos = block.position();
         self.instances.push(Instance::new(
-            Vec3A::new(block_pos.x as f32, block_pos.y as f32, block_pos.z as f32) + self.position,
+            Vec3A::new(block_pos.x as f32, block_pos.y as f32, block_pos.z as f32)
+                + (self.position * Vec3A::new(16.0, 16.0, 16.0)),
         ))
     }
 

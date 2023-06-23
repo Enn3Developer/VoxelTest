@@ -25,12 +25,12 @@ struct ChunkPos {
     chunk_pos: vec3<f32>
 }
 
-@group(0)@binding(0)
+@group(1)@binding(0)
 var<uniform> camera: CameraUniform;
 
-@group(1)@binding(0)
+@group(0)@binding(0)
 var t_diffuse: texture_2d<f32>;
-@group(1)@binding(1)
+@group(0)@binding(1)
 var s_diffuse: sampler;
 
 @vertex
@@ -42,7 +42,9 @@ fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
         instance.model_matrix_3,
     );
 
-    let world_position = model_matrix * vec4<f32>(model.position, 1.0);
+    let scale = 0.5;
+
+    let world_position = model_matrix * vec4<f32>(model.position * scale, 1.0);
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * world_position;

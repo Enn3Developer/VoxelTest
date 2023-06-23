@@ -540,11 +540,12 @@ impl App {
                 n_model.add_bind_group(NBindGroup::new(bind_group, layout));
             }
             NCommandSetup::CreatePipeline(bind_groups, shader, mut vertex_layouts, use_model) => {
-                let mut bind_group_layouts = vec![&self.camera_bind_group_layout];
+                let mut bind_group_layouts = vec![];
                 if use_model {
                     bind_group_layouts.push(&self.model_layout);
                     vertex_layouts.insert(0, ModelVertex::desc());
                 }
+                bind_group_layouts.push(&self.camera_bind_group_layout);
                 bind_group_layouts.append(
                     &mut bind_groups
                         .iter()

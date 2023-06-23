@@ -102,13 +102,23 @@ pub async fn run() {
     let camera_controller = Box::new(CameraController::new(4.0, 1.0, app.camera()));
     app.add_actor(camera_controller);
     app.register_model("cube.obj");
-    let mut chunk = Chunk::new(Uuid::new_v4(), Vec3A::new(0., 0., 0.));
-    for x in 0..8 {
-        for z in 0..8 {
-            chunk.add_block_data(UVec3::new(x, 0, z), 0);
+    let radius = 32;
+    let half_radius = radius / 2;
+    for chunk_x in -half_radius..half_radius {
+        for chunk_z in -half_radius..half_radius {
+            let mut chunk = Chunk::new(
+                Uuid::new_v4(),
+                Vec3A::new(chunk_x as f32, 0., chunk_z as f32),
+            );
+            for x in 0..16 {
+                for z in 0..16 {
+                    chunk.add_block_data(UVec3::new(x, 0, z), 0);
+                }
+            }
+
+            app.add_model(NModel::new(Box::new(chunk)));
         }
     }
-    app.add_model(NModel::new(Box::new(chunk)));
     let mut last_render_time = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
