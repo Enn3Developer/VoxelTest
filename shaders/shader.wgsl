@@ -19,6 +19,7 @@ struct Light {
     position: vec3<f32>,
     radius: f32,
     color: vec3<f32>,
+    _padding: f32,
 }
 
 struct InstanceInput {

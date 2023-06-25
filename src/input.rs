@@ -108,6 +108,7 @@ impl InputState {
                     pos.1 - self.last_mouse_position.1,
                 );
                 self.last_mouse_position = pos;
+                self.mouse_sample += 1;
 
                 true
             }

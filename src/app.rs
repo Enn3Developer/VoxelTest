@@ -298,7 +298,7 @@ impl App {
         ));
 
         let camera = Rc::new(RefCell::new(Camera::new((0.0, 5.0, 10.0), -1.57, -0.35)));
-        let projection = Projection::new(config.width, config.height, 0.78, 0.1, 1000.0);
+        let projection = Projection::new(config.width, config.height, 0.78, 0.1, 4096.0);
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&camera.borrow(), &projection);
