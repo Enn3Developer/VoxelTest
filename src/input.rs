@@ -91,11 +91,9 @@ impl InputState {
                         if !self.contains(&key) {
                             self.keys.push(key);
                         }
-                    } else {
-                        if self.contains(&key) {
-                            self.keys.remove(self.index(&key));
-                            self.keys_released.push(*keycode);
-                        }
+                    } else if self.contains(&key) {
+                        self.keys.remove(self.index(&key));
+                        self.keys_released.push(*keycode);
                     }
                 }
                 true

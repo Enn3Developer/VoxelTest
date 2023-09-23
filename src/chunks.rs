@@ -4,13 +4,12 @@ use bytemuck::{Pod, Zeroable};
 use glam::{UVec3, Vec3, Vec3A};
 use uuid::Uuid;
 use wgpu::{
-    BindGroupLayoutEntry, BindingType, BufferAddress, BufferBindingType, BufferUsages,
-    ShaderStages, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
+    BufferAddress, BufferUsages, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 
 use crate::{
     app::Model,
-    command_buffer::{CommandBuffer, NCommandRender, NCommandSetup, NResource},
+    command_buffer::{CommandBuffer, NCommandRender, NCommandSetup},
     frustum::Aabb,
     instance::{Instance, InstanceRaw},
     model::Vertex,
@@ -114,7 +113,7 @@ impl Chunk {
             position,
             aabb: Aabb::from_params(
                 aabb_pos.into(),
-                (Into::<Vec3>::into(aabb_pos) + 16.0).into(),
+                (Into::<Vec3>::into(aabb_pos) + 16.0),
             ),
             blocks: vec![],
             instances: vec![],
@@ -177,7 +176,7 @@ impl Model for Chunk {
     fn setup(&self) -> CommandBuffer<NCommandSetup> {
         let mut buffer = CommandBuffer::new();
 
-        let position_buffer = Rc::new(RefCell::new(
+        let _position_buffer = Rc::new(RefCell::new(
             bytemuck::cast_slice::<_, u8>(&[self.position.to_array()]).to_vec(),
         ));
 

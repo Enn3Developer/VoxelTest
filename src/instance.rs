@@ -1,6 +1,6 @@
 use crate::model::Vertex;
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3A, Vec4};
+use glam::{Vec3A, Vec4};
 use std::mem::size_of;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode};
 

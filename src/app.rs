@@ -155,13 +155,7 @@ impl ModelState {
     }
 
     pub fn get_model(&self, id: &Uuid) -> Option<&NModel> {
-        for model in &self.models {
-            if model.id() == id {
-                return Some(model);
-            }
-        }
-
-        None
+        self.models.iter().find(|&model| model.id() == id)
     }
 
     pub fn push(&mut self, model: NModel) {
@@ -253,7 +247,7 @@ impl App {
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::default(),
+                power_preference: PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
