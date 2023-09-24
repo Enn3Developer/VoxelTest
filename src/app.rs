@@ -701,8 +701,6 @@ impl App {
             ));
             let depth = self.depth_texture.clone();
             let cam_bind_group = self.camera_bind_group.clone();
-            let mut render_blocks: HashMap<u32, Vec<InstanceRaw>> = HashMap::new();
-            let mut buffers: HashMap<u32, Buffer> = HashMap::new();
             let cam_position = self.camera.position();
 
             let blocks = self
@@ -753,27 +751,6 @@ impl App {
 
             render_pass.set_bind_group(0, &cam_bind_group, &[]);
 
-            // let now = Instant::now();
-            // for block in blocks {
-            //     if let Entry::Vacant(e) = render_blocks.entry(block.id()) {
-            //         e.insert(vec![block]);
-            //     } else {
-            //         render_blocks.get_mut(&block.id()).unwrap().push(block);
-            //     }
-            // }
-            // let end = Instant::now();
-            // println!("Time: {}us", (end - now).as_micros());
-            // for (id, instances_raw) in &render_blocks {
-            //     buffers.insert(
-            //         id,
-            //         self.device.create_buffer_init(&BufferInitDescriptor {
-            //             label: None,
-            //             contents: cast_slice(instances_raw),
-            //             usage: BufferUsages::VERTEX,
-            //         }),
-            //     );
-            // }
-
             render_pass.set_pipeline(&self.block_pipeline);
 
             render_pass.set_vertex_buffer(1, buffer.slice(..));
@@ -784,34 +761,6 @@ impl App {
                 None,
                 &[],
             );
-
-            // for (id, instances_raw) in &render_blocks {
-            //     render_pass.set_vertex_buffer(1, buffers.get(id).unwrap().slice(..));
-            //     render_pass.draw_model_instanced(
-            //         &self.obj_models[*id as usize],
-            //         0..instances_raw.len() as u32,
-            //         &self.camera_bind_group,
-            //         None,
-            //         &[],
-            //     );
-            // }
-
-            //            models
-            //                .models()
-            //                .par_iter()
-            //                .filter(|model| culling.test_bounding_box(model.aabb()))
-            //                .filter(|model| {
-            //                    model.position().distance_squared(cam_position)
-            //                        < self.projection.z_far().powi(2)
-            //                })
-            //                .map(|model| (model, model.render()))
-            //                .collect::<Vec<(&NModel, CommandBuffer<NCommandRender>)>>()
-            //                .into_iter()
-            //                .for_each(|(model, command_buffer)| {
-            //                    for command in command_buffer.iter_command() {
-            //                        self.parse_render_command(command, model, &mut render_pass);
-            //                    }
-            //                });
         }
 
         self.ui.render(&self.fps_label);
