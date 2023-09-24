@@ -250,13 +250,13 @@ impl Actor for CameraController {
     }
 
     fn update(&mut self, dt: &Duration, inputs: &InputState) -> CommandBuffer<NCommandUpdate> {
-        let mut buffer = CommandBuffer::new();
+        let buffer = CommandBuffer::new();
         // let dt = dt.as_secs_f32();
-        // 
+        //
         // self.process_keyboard(inputs);
         // self.process_mouse(inputs);
         // self.process_scroll(inputs);
-        // 
+        //
         // // Move forward/backward and left/right
         // let (yaw_sin, yaw_cos) = self.camera.borrow().yaw.sin_cos();
         // let forward = Vec3A::new(yaw_cos, 0.0, yaw_sin).normalize();
@@ -264,16 +264,16 @@ impl Actor for CameraController {
         // let mut offset = Vec3A::ZERO;
         // offset += forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
         // offset += right * (self.amount_right - self.amount_left) * self.speed * dt;
-        // 
+        //
         // // Move in/out (aka. "zoom")
         // let (pitch_sin, pitch_cos) = self.camera.borrow().pitch.sin_cos();
         // let scrollward =
         //     Vec3A::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
         // offset += scrollward * self.scroll * self.speed * self.sensitivity * dt;
-        // 
+        //
         // // Move up/down.
         // offset.y += (self.amount_up - self.amount_down) * self.speed * dt;
-        // 
+        //
         // buffer.push(NCommandUpdate::MoveCamera(offset));
         // buffer.push(NCommandUpdate::RotateCamera(
         //     self.rotate_horizontal * self.sensitivity * dt,

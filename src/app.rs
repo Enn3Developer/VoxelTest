@@ -15,6 +15,7 @@ use bytemuck::cast_slice;
 use glam::{Mat4, Vec3A};
 use rayon::prelude::*;
 use std::cell::RefCell;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::iter;
 use std::ops::Deref;
@@ -743,25 +744,15 @@ impl App {
                     chunk
                         .blocks()
                         .iter()
-                        .map(|block| {
-                            (
-                                Instance::new((
-                                    block.x() as f32 + chunk.position().x * 16.0,
-                                    block.y() as f32 + chunk.position().y * 16.0,
-                                    block.z() as f32 + chunk.position().z * 16.0,
-                                ))
-                                .to_raw(),
-                                block.id(),
-                            )
-                        })
+                        .map(|block| (block.to_raw(), block.id()))
                         .collect::<Vec<(InstanceRaw, u16)>>()
                 });
 
             for block in blocks {
-                if render_blocks.contains_key(&block.1) {
-                    render_blocks.get_mut(&block.1).unwrap().push(block.0);
+                if let Entry::Vacant(e) = render_blocks.entry(block.1) {
+                    e.insert(vec![block.0]);
                 } else {
-                    render_blocks.insert(block.1, vec![block.0]);
+                    render_blocks.get_mut(&block.1).unwrap().push(block.0);
                 }
             }
 

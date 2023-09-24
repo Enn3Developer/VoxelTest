@@ -113,7 +113,7 @@ pub async fn run() {
             );
             for x in 0..16 {
                 for z in 0..16 {
-                    chunk.add_block_data(UVec3::new(x, 0, z), 0);
+                    chunk.add_block_data(Vec3A::new(x as f32, 0.0, z as f32), 0);
                 }
             }
 

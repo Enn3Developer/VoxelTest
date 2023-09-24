@@ -4,6 +4,7 @@ use glam::{Vec3A, Vec4};
 use std::mem::size_of;
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode};
 
+#[derive(Debug)]
 pub struct Instance {
     pub position: Vec3A,
 }
