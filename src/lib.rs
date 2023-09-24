@@ -1,11 +1,11 @@
 #![allow(non_snake_case)]
 
 use crate::app::App;
-use app::NModel;
+
 use camera::CameraController;
 use chunks::Chunk;
-use glam::{UVec3, Vec3A};
-use std::thread::spawn;
+use glam::{Vec3A};
+
 use std::time::Instant;
 use uuid::Uuid;
 use wgpu::{

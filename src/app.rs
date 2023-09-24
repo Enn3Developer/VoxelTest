@@ -1,12 +1,12 @@
 use crate::camera::{Camera, CameraUniform, Projection};
-use crate::chunks::{Block, Chunk};
+use crate::chunks::{Chunk};
 use crate::command_buffer::{
     CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource,
 };
 use crate::create_render_pipeline;
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
-use crate::instance::{Instance, InstanceRaw};
+use crate::instance::{InstanceRaw};
 use crate::model::{DrawModel, ModelVertex, Vertex};
 use crate::resource::load_model;
 use crate::texture::Texture;

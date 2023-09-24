@@ -1,18 +1,15 @@
-use std::{cell::RefCell, mem::size_of, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-use bytemuck::{Pod, Zeroable};
-use glam::{UVec3, Vec3, Vec3A};
+
+use glam::{Vec3, Vec3A};
 use uuid::Uuid;
-use wgpu::{
-    BufferAddress, BufferUsages, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
-};
+
 
 use crate::{
     app::Model,
     command_buffer::{CommandBuffer, NCommandRender, NCommandSetup},
     frustum::Aabb,
     instance::{Instance, InstanceRaw},
-    model::Vertex,
 };
 
 #[derive(Debug)]
@@ -132,7 +129,7 @@ impl Model for Chunk {
     }
 
     fn setup(&self) -> CommandBuffer<NCommandSetup> {
-        let mut buffer = CommandBuffer::new();
+        let buffer = CommandBuffer::new();
 
         // let _position_buffer = Rc::new(RefCell::new(
         //     bytemuck::cast_slice::<_, u8>(&[self.position.to_array()]).to_vec(),
@@ -164,7 +161,7 @@ impl Model for Chunk {
     }
 
     fn render(&self) -> CommandBuffer<NCommandRender> {
-        let mut buffer = CommandBuffer::new();
+        let buffer = CommandBuffer::new();
 
         // buffer.push(NCommandRender::SetPipeline(0));
         // buffer.push(NCommandRender::SetVertexBuffer(1, 0));

@@ -1,8 +1,8 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3, Vec3A};
-use std::cell::RefCell;
+
 use std::f32::consts::FRAC_PI_2;
-use std::rc::Rc;
+
 use std::time::Duration;
 use uuid::Uuid;
 use winit::event::VirtualKeyCode;
@@ -249,7 +249,7 @@ impl Actor for CameraController {
         &self.id
     }
 
-    fn update(&mut self, dt: &Duration, inputs: &InputState) -> CommandBuffer<NCommandUpdate> {
+    fn update(&mut self, _dt: &Duration, _inputs: &InputState) -> CommandBuffer<NCommandUpdate> {
         let buffer = CommandBuffer::new();
         // let dt = dt.as_secs_f32();
         //
