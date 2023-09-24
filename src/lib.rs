@@ -4,7 +4,7 @@ use crate::app::App;
 
 use camera::CameraController;
 use chunks::Chunk;
-use glam::{Vec3A};
+use glam::Vec3A;
 
 use std::time::Instant;
 use uuid::Uuid;

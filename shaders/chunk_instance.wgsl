@@ -5,6 +5,7 @@ struct VertexInput {
 
 struct InstanceInput {
     @location(5) position: vec4<f32>,
+    @location(6) id: u32,
 }
 
 struct VertexOutput {

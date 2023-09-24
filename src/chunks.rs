@@ -1,9 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
-
-
 use glam::{Vec3, Vec3A};
 use uuid::Uuid;
-
 
 use crate::{
     app::Model,
@@ -14,20 +10,18 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Block {
-    id: u16,
     instance: Instance,
 }
 
 impl Block {
     pub fn new(position: Vec3A) -> Self {
         Self {
-            id: 0,
-            instance: Instance::new(position),
+            instance: Instance::new(position, 0),
         }
     }
 
     pub fn with_id(mut self, id: u16) -> Self {
-        self.id = id;
+        self.instance.id = id;
 
         self
     }
@@ -49,7 +43,7 @@ impl Block {
     }
 
     pub fn id(&self) -> u16 {
-        self.id
+        self.instance.id
     }
 
     pub fn to_raw(&self) -> InstanceRaw {
@@ -62,7 +56,6 @@ pub struct Chunk {
     position: Vec3A,
     aabb: Aabb,
     blocks: Vec<Block>,
-    block_data: Rc<RefCell<Vec<u8>>>,
 }
 
 impl Chunk {
@@ -73,7 +66,6 @@ impl Chunk {
             position,
             aabb: Aabb::from_params(aabb_pos.into(), Into::<Vec3>::into(aabb_pos) + 16.0),
             blocks: vec![],
-            block_data: Rc::new(RefCell::new(vec![])),
         }
     }
 

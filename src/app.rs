@@ -1,12 +1,12 @@
 use crate::camera::{Camera, CameraUniform, Projection};
-use crate::chunks::{Chunk};
+use crate::chunks::Chunk;
 use crate::command_buffer::{
     CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource,
 };
 use crate::create_render_pipeline;
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
-use crate::instance::{InstanceRaw};
+use crate::instance::InstanceRaw;
 use crate::model::{DrawModel, ModelVertex, Vertex};
 use crate::resource::load_model;
 use crate::texture::Texture;
@@ -21,7 +21,7 @@ use std::iter;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::slice::Iter;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
@@ -701,8 +701,31 @@ impl App {
             ));
             let depth = self.depth_texture.clone();
             let cam_bind_group = self.camera_bind_group.clone();
-            let mut render_blocks: HashMap<u16, Vec<InstanceRaw>> = HashMap::new();
-            let mut buffers = HashMap::new();
+            let mut render_blocks: HashMap<u32, Vec<InstanceRaw>> = HashMap::new();
+            let mut buffers: HashMap<u32, Buffer> = HashMap::new();
+            let cam_position = self.camera.position();
+
+            let blocks = self
+                .chunks
+                .iter()
+                .filter(|chunk| culling.test_bounding_box(chunk.aabb()))
+                .filter(|chunk| {
+                    chunk.position().distance_squared(cam_position)
+                        < self.projection.z_far().powi(2)
+                })
+                .flat_map(|chunk| {
+                    chunk
+                        .blocks()
+                        .iter()
+                        .map(|block| block.to_raw())
+                        .collect::<Vec<InstanceRaw>>()
+                })
+                .collect::<Vec<InstanceRaw>>();
+            let buffer = self.device.create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents: cast_slice(&blocks),
+                usage: BufferUsages::VERTEX,
+            });
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -730,55 +753,48 @@ impl App {
 
             render_pass.set_bind_group(0, &cam_bind_group, &[]);
 
-            let cam_position = self.camera.position();
-
-            let blocks = self
-                .chunks
-                .iter()
-                .filter(|chunk| culling.test_bounding_box(chunk.aabb()))
-                .filter(|chunk| {
-                    chunk.position().distance_squared(cam_position)
-                        < self.projection.z_far().powi(2)
-                })
-                .flat_map(|chunk| {
-                    chunk
-                        .blocks()
-                        .iter()
-                        .map(|block| (block.to_raw(), block.id()))
-                        .collect::<Vec<(InstanceRaw, u16)>>()
-                });
-
-            for block in blocks {
-                if let Entry::Vacant(e) = render_blocks.entry(block.1) {
-                    e.insert(vec![block.0]);
-                } else {
-                    render_blocks.get_mut(&block.1).unwrap().push(block.0);
-                }
-            }
-
-            for (id, instances_raw) in &render_blocks {
-                buffers.insert(
-                    id,
-                    self.device.create_buffer_init(&BufferInitDescriptor {
-                        label: None,
-                        contents: cast_slice(instances_raw),
-                        usage: BufferUsages::VERTEX,
-                    }),
-                );
-            }
+            // let now = Instant::now();
+            // for block in blocks {
+            //     if let Entry::Vacant(e) = render_blocks.entry(block.id()) {
+            //         e.insert(vec![block]);
+            //     } else {
+            //         render_blocks.get_mut(&block.id()).unwrap().push(block);
+            //     }
+            // }
+            // let end = Instant::now();
+            // println!("Time: {}us", (end - now).as_micros());
+            // for (id, instances_raw) in &render_blocks {
+            //     buffers.insert(
+            //         id,
+            //         self.device.create_buffer_init(&BufferInitDescriptor {
+            //             label: None,
+            //             contents: cast_slice(instances_raw),
+            //             usage: BufferUsages::VERTEX,
+            //         }),
+            //     );
+            // }
 
             render_pass.set_pipeline(&self.block_pipeline);
 
-            for (id, instances_raw) in &render_blocks {
-                render_pass.set_vertex_buffer(1, buffers.get(id).unwrap().slice(..));
-                render_pass.draw_model_instanced(
-                    &self.obj_models[*id as usize],
-                    0..instances_raw.len() as u32,
-                    &self.camera_bind_group,
-                    None,
-                    &[],
-                );
-            }
+            render_pass.set_vertex_buffer(1, buffer.slice(..));
+            render_pass.draw_model_instanced(
+                &self.obj_models[0],
+                0..blocks.len() as u32,
+                &self.camera_bind_group,
+                None,
+                &[],
+            );
+
+            // for (id, instances_raw) in &render_blocks {
+            //     render_pass.set_vertex_buffer(1, buffers.get(id).unwrap().slice(..));
+            //     render_pass.draw_model_instanced(
+            //         &self.obj_models[*id as usize],
+            //         0..instances_raw.len() as u32,
+            //         &self.camera_bind_group,
+            //         None,
+            //         &[],
+            //     );
+            // }
 
             //            models
             //                .models()
