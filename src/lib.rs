@@ -5,6 +5,7 @@ use app::NModel;
 use camera::CameraController;
 use chunks::Chunk;
 use glam::{UVec3, Vec3A};
+use std::thread::spawn;
 use std::time::Instant;
 use uuid::Uuid;
 use wgpu::{
@@ -99,7 +100,7 @@ pub async fn run() {
 
     // let mut state = State::new(window).await;
     let mut app = App::new(window).await;
-    let camera_controller = Box::new(CameraController::new(4.0, 1.0, app.camera()));
+    let camera_controller = Box::new(CameraController::new(4.0, 1.0));
     app.add_actor(camera_controller);
     app.register_model("cube.obj");
     let radius = 32;
@@ -116,7 +117,7 @@ pub async fn run() {
                 }
             }
 
-            app.add_model(NModel::new(Box::new(chunk)));
+            app.add_chunk(chunk);
         }
     }
     let mut last_render_time = Instant::now();

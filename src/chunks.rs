@@ -111,14 +111,15 @@ impl Chunk {
         Self {
             id,
             position,
-            aabb: Aabb::from_params(
-                aabb_pos.into(),
-                (Into::<Vec3>::into(aabb_pos) + 16.0),
-            ),
+            aabb: Aabb::from_params(aabb_pos.into(), (Into::<Vec3>::into(aabb_pos) + 16.0)),
             blocks: vec![],
             instances: vec![],
             block_data: Rc::new(RefCell::new(vec![])),
         }
+    }
+
+    pub fn blocks(&self) -> &[Block] {
+        &self.blocks
     }
 
     pub fn exists_block<V: Into<UVec3>>(&self, position: V) -> bool {
@@ -138,7 +139,7 @@ impl Chunk {
         self.instances.push(Instance::new(
             Vec3A::new(block_pos.x as f32, block_pos.y as f32, block_pos.z as f32)
                 + (self.position * Vec3A::new(16.0, 16.0, 16.0)),
-        ))
+        ));
     }
 
     pub fn add_block_data<V: Into<UVec3>>(&mut self, position: V, id: u16) {

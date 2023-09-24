@@ -1,11 +1,51 @@
+use crate::resource::load_model;
 use crate::texture::Texture;
 use bytemuck::{Pod, Zeroable};
+use std::collections::HashMap;
 use std::mem::size_of;
 use std::ops::Range;
 use wgpu::{
-    BindGroup, BindGroupLayout, Buffer, BufferAddress, Device, IndexFormat, RenderPass,
+    BindGroup, BindGroupLayout, Buffer, BufferAddress, Device, IndexFormat, Queue, RenderPass,
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
+
+pub struct ModelRegistryBuilder {
+    models: HashMap<u16, ObjModel>,
+}
+
+impl ModelRegistryBuilder {
+    pub fn new() -> Self {
+        Self {
+            models: HashMap::new(),
+        }
+    }
+
+    pub fn register_model(
+        &mut self,
+        id: u16,
+        file: &str,
+        device: &Device,
+        queue: &Queue,
+        layout: &BindGroupLayout,
+    ) {
+        self.models
+            .insert(id, load_model(file, device, queue, layout).unwrap());
+    }
+
+    pub fn build_models(self) -> Vec<ObjModel> {
+        let mut models = vec![];
+
+        for (id, model) in self.models {
+            if id as usize >= models.len() {
+                models.push(model);
+            } else {
+                models.insert(id as usize, model);
+            }
+        }
+
+        models
+    }
+}
 
 pub trait Vertex {
     fn desc() -> VertexBufferLayout<'static>;

@@ -1,10 +1,12 @@
 use crate::camera::{Camera, CameraUniform, Projection};
+use crate::chunks::{Block, Chunk};
 use crate::command_buffer::{
     CommandBuffer, NCommandRender, NCommandSetup, NCommandUpdate, NResource,
 };
 use crate::create_render_pipeline;
 use crate::frustum::{Aabb, FrustumCuller};
 use crate::input::InputState;
+use crate::instance::{Instance, InstanceRaw};
 use crate::model::{DrawModel, ModelVertex, Vertex};
 use crate::resource::load_model;
 use crate::texture::Texture;
@@ -13,6 +15,7 @@ use bytemuck::cast_slice;
 use glam::{Mat4, Vec3A};
 use rayon::prelude::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::iter;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -215,7 +218,7 @@ pub struct App {
     depth_texture: Rc<Texture>,
     ui: UI,
 
-    camera: Rc<RefCell<Camera>>,
+    camera: Camera,
     projection: Projection,
     camera_uniform: CameraUniform,
     camera_buffer: Buffer,
@@ -228,6 +231,9 @@ pub struct App {
     fps_label: Label,
     calc_fps: u32,
     last_time: f32,
+
+    chunks: Vec<Chunk>,
+    pub block_pipeline: RenderPipeline,
 }
 
 impl App {
@@ -291,11 +297,11 @@ impl App {
             "depth_texture",
         ));
 
-        let camera = Rc::new(RefCell::new(Camera::new((0.0, 5.0, 10.0), -1.57, -0.35)));
+        let camera = Camera::new((0.0, 5.0, 10.0), -1.57, -0.35);
         let projection = Projection::new(config.width, config.height, 0.78, 0.1, 4096.0);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera.borrow(), &projection);
+        camera_uniform.update_view_proj(&camera, &projection);
 
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -360,6 +366,28 @@ impl App {
             label: Some("texture_bind_group_layout"),
         });
 
+        let block_pipeline = {
+            let bind_group_layouts = vec![&model_layout, &camera_bind_group_layout];
+            let vertex_layouts = vec![ModelVertex::desc(), InstanceRaw::desc()];
+            let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &bind_group_layouts,
+                push_constant_ranges: &[],
+            });
+            let shader = ShaderModuleDescriptor {
+                label: None,
+                source: ShaderSource::Wgsl(include_str!("../shaders/chunk_instance.wgsl").into()),
+            };
+            create_render_pipeline(
+                &device,
+                &pipeline_layout,
+                config.format,
+                Some(Texture::DEPTH_FORMAT),
+                &vertex_layouts,
+                shader,
+            )
+        };
+
         Self {
             actors: ActorState::new(),
             models: Rc::new(RefCell::new(ModelState::new())),
@@ -387,6 +415,9 @@ impl App {
             fps_label,
             calc_fps: 0,
             last_time: 0.0,
+
+            chunks: vec![],
+            block_pipeline,
         }
     }
 
@@ -408,8 +439,12 @@ impl App {
             .push(load_model(name, &self.device, &self.queue, &self.model_layout).unwrap());
     }
 
-    pub fn camera(&self) -> Rc<RefCell<Camera>> {
-        self.camera.clone()
+    pub fn camera(&self) -> &Camera {
+        &self.camera
+    }
+
+    pub fn add_chunk(&mut self, chunk: Chunk) {
+        self.chunks.push(chunk);
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -473,11 +508,11 @@ impl App {
                 }
             }
             NCommandUpdate::MoveCamera(offset) => {
-                self.camera.borrow_mut().move_position(offset);
+                self.camera.move_position(offset);
             }
             NCommandUpdate::RotateCamera(yaw, pitch) => {
-                self.camera.borrow_mut().add_yaw(yaw);
-                self.camera.borrow_mut().add_pitch(pitch);
+                self.camera.add_yaw(yaw);
+                self.camera.add_pitch(pitch);
             }
             NCommandUpdate::FovCamera(_fov) => {}
             NCommandUpdate::UpdateBuffer(id, idx) => {
@@ -631,7 +666,7 @@ impl App {
             });
 
         self.camera_uniform
-            .update_view_proj(&self.camera.borrow(), &self.projection);
+            .update_view_proj(&self.camera, &self.projection);
         self.queue
             .write_buffer(&self.camera_buffer, 0, cast_slice(&[self.camera_uniform]));
 
@@ -665,8 +700,8 @@ impl App {
             ));
             let depth = self.depth_texture.clone();
             let cam_bind_group = self.camera_bind_group.clone();
-            let models = self.models.clone();
-            let models = models.borrow();
+            let mut render_blocks: HashMap<u16, Vec<InstanceRaw>> = HashMap::new();
+            let mut buffers = HashMap::new();
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -694,24 +729,82 @@ impl App {
 
             render_pass.set_bind_group(0, &cam_bind_group, &[]);
 
-            let cam_position = self.camera.borrow().position();
+            let cam_position = self.camera.position();
 
-            models
-                .models()
-                .par_iter()
-                .filter(|model| culling.test_bounding_box(model.aabb()))
-                .filter(|model| {
-                    model.position().distance_squared(cam_position)
+            let blocks = self
+                .chunks
+                .iter()
+                .filter(|chunk| culling.test_bounding_box(chunk.aabb()))
+                .filter(|chunk| {
+                    chunk.position().distance_squared(cam_position)
                         < self.projection.z_far().powi(2)
                 })
-                .map(|model| (model, model.render()))
-                .collect::<Vec<(&NModel, CommandBuffer<NCommandRender>)>>()
-                .into_iter()
-                .for_each(|(model, command_buffer)| {
-                    for command in command_buffer.iter_command() {
-                        self.parse_render_command(command, model, &mut render_pass);
-                    }
+                .flat_map(|chunk| {
+                    chunk
+                        .blocks()
+                        .iter()
+                        .map(|block| {
+                            (
+                                Instance::new((
+                                    block.x() as f32 + chunk.position().x * 16.0,
+                                    block.y() as f32 + chunk.position().y * 16.0,
+                                    block.z() as f32 + chunk.position().z * 16.0,
+                                ))
+                                .to_raw(),
+                                block.id(),
+                            )
+                        })
+                        .collect::<Vec<(InstanceRaw, u16)>>()
                 });
+
+            for block in blocks {
+                if render_blocks.contains_key(&block.1) {
+                    render_blocks.get_mut(&block.1).unwrap().push(block.0);
+                } else {
+                    render_blocks.insert(block.1, vec![block.0]);
+                }
+            }
+
+            for (id, instances_raw) in &render_blocks {
+                buffers.insert(
+                    id,
+                    self.device.create_buffer_init(&BufferInitDescriptor {
+                        label: None,
+                        contents: cast_slice(instances_raw),
+                        usage: BufferUsages::VERTEX,
+                    }),
+                );
+            }
+
+            render_pass.set_pipeline(&self.block_pipeline);
+
+            for (id, instances_raw) in &render_blocks {
+                render_pass.set_vertex_buffer(1, buffers.get(id).unwrap().slice(..));
+                render_pass.draw_model_instanced(
+                    &self.obj_models[*id as usize],
+                    0..instances_raw.len() as u32,
+                    &self.camera_bind_group,
+                    None,
+                    &[],
+                );
+            }
+
+            //            models
+            //                .models()
+            //                .par_iter()
+            //                .filter(|model| culling.test_bounding_box(model.aabb()))
+            //                .filter(|model| {
+            //                    model.position().distance_squared(cam_position)
+            //                        < self.projection.z_far().powi(2)
+            //                })
+            //                .map(|model| (model, model.render()))
+            //                .collect::<Vec<(&NModel, CommandBuffer<NCommandRender>)>>()
+            //                .into_iter()
+            //                .for_each(|(model, command_buffer)| {
+            //                    for command in command_buffer.iter_command() {
+            //                        self.parse_render_command(command, model, &mut render_pass);
+            //                    }
+            //                });
         }
 
         self.ui.render(&self.fps_label);
