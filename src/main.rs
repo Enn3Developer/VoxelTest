@@ -1,8 +1,7 @@
 #![allow(non_snake_case)]
 
-use VoxelTest::run;
+use VoxelTest::engine::engine::run_engine;
 
-// TODO: Add chunks logic
 fn main() {
-    pollster::block_on(run());
+    run_engine();
 }
