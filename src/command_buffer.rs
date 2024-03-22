@@ -32,7 +32,12 @@ impl NCommand for NCommandUpdate {}
 pub enum NCommandSetup {
     CreateBuffer(Rc<RefCell<Vec<u8>>>, BufferUsages),
     CreateBindGroup(Vec<BindGroupLayoutEntry>, Vec<NResource>),
-    CreatePipeline(Vec<Index>, &'static str, Vec<VertexBufferLayout<'static>>, bool),
+    CreatePipeline(
+        Vec<Index>,
+        &'static str,
+        Vec<VertexBufferLayout<'static>>,
+        bool,
+    ),
     SharePipeline(&'static ID, Index),
 }
 
