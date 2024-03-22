@@ -1,18 +1,20 @@
+use winit::event::KeyEvent;
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, KeyboardInput, MouseScrollDelta, VirtualKeyCode, WindowEvent},
+    event::{ElementState, MouseScrollDelta, WindowEvent},
+    keyboard,
 };
 
 // TODO: Implement all the needed functions
 
 #[derive(PartialEq, Eq)]
 pub struct Key {
-    keycode: VirtualKeyCode,
+    keycode: keyboard::Key,
     previous: bool,
 }
 
 impl Key {
-    pub fn new(keycode: VirtualKeyCode) -> Self {
+    pub fn new(keycode: keyboard::Key) -> Self {
         Self {
             keycode,
             previous: false,
@@ -22,7 +24,7 @@ impl Key {
 
 pub struct InputState {
     keys: Vec<Key>,
-    keys_released: Vec<VirtualKeyCode>,
+    keys_released: Vec<keyboard::Key>,
     mouse_delta: (f32, f32),
     last_mouse_position: (f32, f32),
     mouse_sample: u32,
@@ -77,25 +79,21 @@ impl InputState {
     pub fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state,
-                        virtual_keycode,
-                        ..
-                    },
+                event: KeyEvent {
+                    logical_key, state, ..
+                },
                 ..
             } => {
-                if let Some(keycode) = virtual_keycode {
-                    let key = Key::new(*keycode);
-                    if let ElementState::Pressed = state {
-                        if !self.contains(&key) {
-                            self.keys.push(key);
-                        }
-                    } else if self.contains(&key) {
-                        self.keys.remove(self.index(&key));
-                        self.keys_released.push(*keycode);
+                let key = Key::new(logical_key.clone());
+                if let ElementState::Pressed = state {
+                    if !self.contains(&key) {
+                        self.keys.push(key);
                     }
+                } else if self.contains(&key) {
+                    self.keys.remove(self.index(&key));
+                    self.keys_released.push(logical_key.clone());
                 }
+
                 true
             }
 
@@ -140,7 +138,7 @@ impl InputState {
         self.mouse_scroll
     }
 
-    pub fn is_key_pressed(&self, key: &VirtualKeyCode) -> bool {
+    pub fn is_key_pressed(&self, key: &keyboard::Key) -> bool {
         for k in &self.keys {
             if &k.keycode == key {
                 return true;
@@ -150,7 +148,7 @@ impl InputState {
         false
     }
 
-    pub fn is_key_just_pressed(&self, key: &VirtualKeyCode) -> bool {
+    pub fn is_key_just_pressed(&self, key: &keyboard::Key) -> bool {
         for k in &self.keys {
             if &k.keycode == key && !k.previous {
                 return true;
@@ -160,7 +158,7 @@ impl InputState {
         false
     }
 
-    pub fn is_key_just_released(&self, key: &VirtualKeyCode) -> bool {
+    pub fn is_key_just_released(&self, key: &keyboard::Key) -> bool {
         self.keys_released.contains(key)
     }
 }

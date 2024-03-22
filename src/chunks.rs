@@ -111,10 +111,7 @@ impl Chunk {
         Self {
             id,
             position,
-            aabb: Aabb::from_params(
-                aabb_pos.into(),
-                (Into::<Vec3>::into(aabb_pos) + 16.0),
-            ),
+            aabb: Aabb::from_params(aabb_pos.into(), Into::<Vec3>::into(aabb_pos) + 16.0),
             blocks: vec![],
             instances: vec![],
             block_data: Rc::new(RefCell::new(vec![])),

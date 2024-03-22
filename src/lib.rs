@@ -5,6 +5,7 @@ use app::NModel;
 use camera::CameraController;
 use chunks::Chunk;
 use glam::{UVec3, Vec3A};
+use std::sync::Arc;
 use std::time::Instant;
 use uuid::Uuid;
 use wgpu::{
@@ -13,9 +14,11 @@ use wgpu::{
     PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
     ShaderModuleDescriptor, StencilState, TextureFormat, VertexBufferLayout, VertexState,
 };
+use winit::keyboard::NamedKey;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
+    keyboard,
     window::WindowBuilder,
 };
 
@@ -91,13 +94,13 @@ pub fn create_render_pipeline(
 pub async fn run() {
     env_logger::init();
 
-    let event_loop = EventLoop::new();
-    let window = WindowBuilder::new()
-        .with_title("VoxelTest")
-        .build(&event_loop)
-        .unwrap();
-
-    // let mut state = State::new(window).await;
+    let event_loop = EventLoop::new().unwrap();
+    let window = Arc::new(
+        WindowBuilder::new()
+            .with_title("VoxelTest")
+            .build(&event_loop)
+            .unwrap(),
+    );
     let mut app = App::new(window).await;
     let camera_controller = Box::new(CameraController::new(4.0, 1.0, app.camera()));
     app.add_actor(camera_controller);
@@ -121,49 +124,48 @@ pub async fn run() {
     }
     let mut last_render_time = Instant::now();
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-        match event {
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == app.window().id() && !app.input(event) => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                WindowEvent::Resized(physical_size) => {
-                    app.resize(*physical_size);
-                }
-                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    app.resize(**new_inner_size);
+    event_loop
+        .run(move |event, event_loop| {
+            event_loop.set_control_flow(ControlFlow::Poll);
+            match event {
+                Event::WindowEvent {
+                    ref event,
+                    window_id,
+                } if window_id == app.window().id() && !app.input(event) => match event {
+                    WindowEvent::CloseRequested
+                    | WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                logical_key: keyboard::Key::Named(NamedKey::Escape),
+                                ..
+                            },
+                        ..
+                    } => event_loop.exit(),
+                    WindowEvent::Resized(size) => {
+                        app.resize(size);
+                    }
+                    WindowEvent::RedrawRequested => {
+                        let now = Instant::now();
+                        let dt = now - last_render_time;
+                        last_render_time = now;
+                        app.update(dt);
+                        match app.render() {
+                            Ok(_) => {}
+                            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                                app.resize(&app.size())
+                            }
+                            Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                            Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                        }
+                    }
+                    _ => {}
+                },
+                Event::AboutToWait => {
+                    app.window().request_redraw();
                 }
                 _ => {}
-            },
-            Event::RedrawRequested(window_id) if window_id == app.window().id() => {
-                let now = Instant::now();
-                let dt = now - last_render_time;
-                last_render_time = now;
-                app.update(dt);
-                match app.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        app.resize(app.size())
-                    }
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                }
             }
-            Event::MainEventsCleared => {
-                app.window().request_redraw();
-            }
-            _ => {}
-        }
-    });
+        })
+        .unwrap();
 }

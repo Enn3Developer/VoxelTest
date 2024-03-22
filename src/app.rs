@@ -8,27 +8,32 @@ use crate::input::InputState;
 use crate::model::{DrawModel, ModelVertex, Vertex};
 use crate::resource::load_model;
 use crate::texture::Texture;
-use crate::ui::{Label, UI};
 use bytemuck::cast_slice;
 use glam::{Mat4, Vec3A};
+use glyphon::{
+    Attrs, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas,
+    TextBounds, TextRenderer,
+};
 use rayon::prelude::*;
 use std::cell::RefCell;
 use std::iter;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::slice::Iter;
+use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType,
-    BufferUsages, Color, CommandEncoderDescriptor, Device, Features, InstanceDescriptor, Limits,
-    LoadOp, Operations, PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RenderPass,
+    BufferUsages, Color, CommandEncoderDescriptor, CompareFunction, DepthStencilState, Device,
+    Features, InstanceDescriptor, Limits, LoadOp, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PowerPreference, PresentMode, Queue, RenderPass,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RequestAdapterOptions, SamplerBindingType, ShaderModuleDescriptor,
-    ShaderSource, ShaderStages, Surface, SurfaceConfiguration, TextureSampleType, TextureUsages,
-    TextureViewDescriptor, TextureViewDimension,
+    ShaderSource, ShaderStages, StoreOp, Surface, SurfaceConfiguration, TextureFormat,
+    TextureSampleType, TextureUsages, TextureViewDescriptor, TextureViewDimension,
 };
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
@@ -201,19 +206,18 @@ impl ActorState {
     }
 }
 
-pub struct App {
+pub struct App<'a> {
     actors: ActorState,
     models: Rc<RefCell<ModelState>>,
     input_state: InputState,
 
-    surface: Surface,
+    surface: Surface<'a>,
     device: Rc<Device>,
     queue: Queue,
     config: SurfaceConfiguration,
     size: PhysicalSize<u32>,
-    window: Window,
+    window: Arc<Window>,
     depth_texture: Rc<Texture>,
-    ui: UI,
 
     camera: Rc<RefCell<Camera>>,
     projection: Projection,
@@ -225,25 +229,26 @@ pub struct App {
     model_layout: BindGroupLayout,
     obj_models: Vec<crate::model::ObjModel>,
 
-    fps_label: Label,
+    font_system: FontSystem,
+    cache: SwashCache,
+    text_atlas: TextAtlas,
+    text_renderer: TextRenderer,
+    text_buffer: glyphon::Buffer,
+
     calc_fps: u32,
     last_time: f32,
 }
 
-impl App {
-    pub async fn new(window: Window) -> Self {
+impl App<'_> {
+    pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(InstanceDescriptor {
             backends: Backends::all(),
-            dx12_shader_compiler: Default::default(),
+            ..Default::default()
         });
 
-        // # Safety
-        //
-        // The surface needs to live as long as the window that created it.
-        // State owns the window so this should be safe.
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
@@ -257,8 +262,8 @@ impl App {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: Features::empty(),
-                    limits: Limits::default(),
+                    required_features: Features::empty(),
+                    required_limits: Limits::default(),
                 },
                 None,
             )
@@ -280,6 +285,7 @@ impl App {
             width: size.width,
             height: size.height,
             present_mode: PresentMode::AutoNoVsync,
+            desired_maximum_frame_latency: 2,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
@@ -327,16 +333,31 @@ impl App {
             label: Some("camera_bind_group"),
         }));
 
-        let ui = UI::new(
-            include_bytes!("../fonts/FiraSans-Regular.ttf"),
-            device.clone(),
-            surface_format,
+        let mut font_system = FontSystem::new();
+        let cache = SwashCache::new();
+        let mut atlas = TextAtlas::new(&device, &queue, TextureFormat::Bgra8UnormSrgb);
+        let text_renderer = TextRenderer::new(
+            &mut atlas,
+            &device,
+            MultisampleState::default(),
+            Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: false,
+                depth_compare: CompareFunction::Never,
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
         );
+        let mut buffer = glyphon::Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
 
-        let fps_label = Label::default()
-            .with_position((10.0, 10.0))
-            .with_bounds((config.width as f32, config.height as f32))
-            .with_text("0 fps");
+        buffer.set_size(&mut font_system, config.width as f32, config.height as f32);
+        buffer.set_text(
+            &mut font_system,
+            "0 fps",
+            Attrs::new().family(Family::SansSerif),
+            Shaping::Basic,
+        );
+        buffer.shape_until_scroll(&mut font_system);
 
         let model_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             entries: &[
@@ -372,7 +393,6 @@ impl App {
             size,
             window,
             depth_texture,
-            ui,
 
             camera,
             projection,
@@ -384,7 +404,12 @@ impl App {
             model_layout,
             obj_models: vec![],
 
-            fps_label,
+            font_system,
+            cache,
+            text_atlas: atlas,
+            text_renderer,
+            text_buffer: buffer,
+
             calc_fps: 0,
             last_time: 0.0,
         }
@@ -412,9 +437,9 @@ impl App {
         self.camera.clone()
     }
 
-    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: &PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
+            self.size = *new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
@@ -639,7 +664,13 @@ impl App {
         self.calc_fps += 1;
 
         if self.last_time >= 1.0 {
-            self.fps_label.set_text(format!("{} fps", self.calc_fps));
+            println!("{} fps", self.calc_fps);
+            self.text_buffer.set_text(
+                &mut self.font_system,
+                &format!("{} fps", self.calc_fps),
+                Attrs::new().family(Family::SansSerif),
+                Shaping::Basic,
+            );
             self.calc_fps = 0;
             self.last_time = 0.0;
         }
@@ -667,6 +698,32 @@ impl App {
             let cam_bind_group = self.camera_bind_group.clone();
             let models = self.models.clone();
             let models = models.borrow();
+            self.text_renderer
+                .prepare(
+                    &self.device,
+                    &self.queue,
+                    &mut self.font_system,
+                    &mut self.text_atlas,
+                    Resolution {
+                        width: self.config.width,
+                        height: self.config.height,
+                    },
+                    [TextArea {
+                        buffer: &self.text_buffer,
+                        left: 10.0,
+                        top: 10.0,
+                        scale: 1.0,
+                        bounds: TextBounds {
+                            left: 0,
+                            top: 0,
+                            right: 600,
+                            bottom: 160,
+                        },
+                        default_color: glyphon::Color::rgb(255, 255, 255),
+                    }],
+                    &mut self.cache,
+                )
+                .unwrap();
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -679,17 +736,19 @@ impl App {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                     view: &depth.view,
                     depth_ops: Some(Operations {
                         load: LoadOp::Clear(1.0),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             render_pass.set_bind_group(0, &cam_bind_group, &[]);
@@ -712,17 +771,15 @@ impl App {
                         self.parse_render_command(command, model, &mut render_pass);
                     }
                 });
+            self.text_renderer
+                .render(&self.text_atlas, &mut render_pass)
+                .unwrap();
         }
-
-        self.ui.render(&self.fps_label);
-        self.ui
-            .draw(&mut encoder, &view, self.config.width, self.config.height)
-            .expect("can't draw");
 
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
 
-        self.ui.recall();
+        self.text_atlas.trim();
 
         Ok(())
     }

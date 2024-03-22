@@ -5,7 +5,7 @@ use std::f32::consts::FRAC_PI_2;
 use std::rc::Rc;
 use std::time::Duration;
 use uuid::Uuid;
-use winit::event::VirtualKeyCode;
+use winit::keyboard::{Key, NamedKey, SmolStr};
 
 use crate::app::Actor;
 use crate::command_buffer::{CommandBuffer, NCommandUpdate};
@@ -152,39 +152,39 @@ impl CameraController {
     }
 
     pub fn process_keyboard(&mut self, inputs: &InputState) {
-        if inputs.is_key_just_pressed(&VirtualKeyCode::W) {
+        if inputs.is_key_just_pressed(&Key::Character(SmolStr::new("W"))) {
             self.amount_forward = 1.0;
-        } else if inputs.is_key_just_released(&VirtualKeyCode::W) {
+        } else if inputs.is_key_just_released(&Key::Character(SmolStr::new("W"))) {
             self.amount_forward = 0.0;
         }
 
-        if inputs.is_key_just_pressed(&VirtualKeyCode::S) {
+        if inputs.is_key_just_pressed(&Key::Character(SmolStr::new("S"))) {
             self.amount_backward = 1.0;
-        } else if inputs.is_key_just_released(&VirtualKeyCode::S) {
+        } else if inputs.is_key_just_released(&Key::Character(SmolStr::new("S"))) {
             self.amount_backward = 0.0;
         }
 
-        if inputs.is_key_just_pressed(&VirtualKeyCode::A) {
+        if inputs.is_key_just_pressed(&Key::Character(SmolStr::new("A"))) {
             self.amount_left = 1.0;
-        } else if inputs.is_key_just_released(&VirtualKeyCode::A) {
+        } else if inputs.is_key_just_released(&Key::Character(SmolStr::new("A"))) {
             self.amount_left = 0.0;
         }
 
-        if inputs.is_key_just_pressed(&VirtualKeyCode::D) {
+        if inputs.is_key_just_pressed(&Key::Character(SmolStr::new("D"))) {
             self.amount_right = 1.0;
-        } else if inputs.is_key_just_released(&VirtualKeyCode::D) {
+        } else if inputs.is_key_just_released(&Key::Character(SmolStr::new("D"))) {
             self.amount_right = 0.0;
         }
 
-        if inputs.is_key_just_pressed(&VirtualKeyCode::Space) {
+        if inputs.is_key_just_pressed(&Key::from(NamedKey::Space)) {
             self.amount_up = 1.0;
-        } else if inputs.is_key_just_released(&VirtualKeyCode::Space) {
+        } else if inputs.is_key_just_released(&Key::from(NamedKey::Space)) {
             self.amount_up = 0.0;
         }
 
-        if inputs.is_key_just_pressed(&VirtualKeyCode::LShift) {
+        if inputs.is_key_just_pressed(&Key::from(NamedKey::Shift)) {
             self.amount_down = 1.0;
-        } else if inputs.is_key_just_released(&VirtualKeyCode::LShift) {
+        } else if inputs.is_key_just_released(&Key::from(NamedKey::Shift)) {
             self.amount_down = 0.0;
         }
     }
